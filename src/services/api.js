@@ -57,4 +57,15 @@ export const createStudentGroup = (data) => api.post('/student-groups/', data);
 export const updateStudentGroup = (id, data) => api.patch(`/student-groups/${id}`, data);
 export const deleteStudentGroup = (id) => api.delete(`/student-groups/${id}`);
 
+// Submission Windows
+export const getActiveWindow = () => api.get('/submission-windows/active');
+export const getSubmissionWindows = () => api.get('/submission-windows/');
+export const createSubmissionWindow = (data) => api.post('/submission-windows/', data);
+export const deleteSubmissionWindow = (id) => api.delete(`/submission-windows/${id}`);
+
+// Teacher Requests
+export const getMyRequests = () => api.get('/teacher-requests/');
+export const createRequest = (data) => api.post('/teacher-requests/', data);
+export const respondToRequest = (id, data) => api.patch(`/teacher-requests/${id}/respond`, data);
+
 export default api;
