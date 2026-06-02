@@ -51,4 +51,10 @@ export const getMyConstraints = () => api.get('/teacher-constraints/');
 export const createConstraint = (data) => api.post('/teacher-constraints/', data);
 export const deleteConstraint = (id) => api.delete(`/teacher-constraints/${id}`);
 
+// Student Groups
+export const getStudentGroups = () => api.get('/student-groups/');
+export const createStudentGroup = (data) => api.post('/student-groups/', data);
+export const updateStudentGroup = (id, data) => api.patch(`/student-groups/${id}`, data);
+export const deleteStudentGroup = (id) => api.delete(`/student-groups/${id}`);
+
 export default api;
