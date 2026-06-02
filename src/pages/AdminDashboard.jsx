@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getTeachers, deleteTeacher } from '../services/api';
+import AddTeacherModal from '../components/AddTeacherModal';
 
 const TABS = [
   { id: 'schedule', label: 'מערכת שעות', icon: 'ti-calendar' },
@@ -46,6 +47,7 @@ export default function AdminDashboard() {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('schedule');
   const [teachers, setTeachers] = useState([]);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
     if (activeTab === 'teachers') {
@@ -72,11 +74,11 @@ export default function AdminDashboard() {
         </div>
 
         <nav style={{ flex: 1 }}>
-          <button key="schedule" onClick={() => setActiveTab('schedule')} style={s.navItem(activeTab === 'schedule')}>
+          <button onClick={() => setActiveTab('schedule')} style={s.navItem(activeTab === 'schedule')}>
             <i className="ti ti-calendar" style={{ fontSize: '18px' }} aria-hidden="true"></i>
             מערכת שעות
           </button>
-          <button key="notifications" onClick={() => setActiveTab('notifications')} style={s.navItem(activeTab === 'notifications')}>
+          <button onClick={() => setActiveTab('notifications')} style={s.navItem(activeTab === 'notifications')}>
             <i className="ti ti-bell" style={{ fontSize: '18px' }} aria-hidden="true"></i>
             התראות
             <span style={{ marginRight: 'auto', backgroundColor: '#FAE8E8', color: '#c0705a', borderRadius: '10px', padding: '2px 8px', fontSize: '12px' }}>3</span>
@@ -84,19 +86,19 @@ export default function AdminDashboard() {
 
           <div style={s.divider}></div>
 
-          <button key="teachers" onClick={() => setActiveTab('teachers')} style={s.navItem(activeTab === 'teachers')}>
+          <button onClick={() => setActiveTab('teachers')} style={s.navItem(activeTab === 'teachers')}>
             <i className="ti ti-users" style={{ fontSize: '18px' }} aria-hidden="true"></i>
             מורים
           </button>
-          <button key="rooms" onClick={() => setActiveTab('rooms')} style={s.navItem(activeTab === 'rooms')}>
+          <button onClick={() => setActiveTab('rooms')} style={s.navItem(activeTab === 'rooms')}>
             <i className="ti ti-building" style={{ fontSize: '18px' }} aria-hidden="true"></i>
             חדרים
           </button>
-          <button key="subjects" onClick={() => setActiveTab('subjects')} style={s.navItem(activeTab === 'subjects')}>
+          <button onClick={() => setActiveTab('subjects')} style={s.navItem(activeTab === 'subjects')}>
             <i className="ti ti-book" style={{ fontSize: '18px' }} aria-hidden="true"></i>
             מקצועות
           </button>
-          <button key="groups" onClick={() => setActiveTab('groups')} style={s.navItem(activeTab === 'groups')}>
+          <button onClick={() => setActiveTab('groups')} style={s.navItem(activeTab === 'groups')}>
             <i className="ti ti-school" style={{ fontSize: '18px' }} aria-hidden="true"></i>
             קבוצות
           </button>
@@ -117,7 +119,7 @@ export default function AdminDashboard() {
             <div style={s.titleLine}></div>
           </div>
           {activeTab === 'teachers' && (
-            <button style={s.btnAdd}>
+            <button style={s.btnAdd} onClick={() => setShowAddModal(true)}>
               <i className="ti ti-plus" aria-hidden="true"></i>
               הוסף מורה
             </button>
@@ -183,6 +185,14 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      {showAddModal && (
+        <AddTeacherModal
+          onClose={() => setShowAddModal(false)}
+          onAdded={(t) => setTeachers([...teachers, t])}
+        />
+      )}
+
     </div>
   );
 }
