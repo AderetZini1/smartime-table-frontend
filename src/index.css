@@ -1,3 +1,12 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+* {
+  font-family: 'Varela Round', sans-serif;
+}
+
+body {
+  background-color: #FAF7F2;
+  color: #4a3f35;
+}

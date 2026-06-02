@@ -34,53 +34,71 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-indigo-700">Smartime</h1>
-          <p className="text-gray-500 mt-2">מערכת שעות חכמה</p>
+    <div style={{ minHeight: '100vh', backgroundColor: '#FAF7F2', display: 'flex', alignItems: 'center', justifyContent: 'center' }} dir="rtl">
+      <div style={{ backgroundColor: '#fff', borderRadius: '20px', border: '1px solid #e2dacc', padding: '48px', width: '100%', maxWidth: '420px' }}>
+        
+        {/* לוגו */}
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <div style={{ fontSize: '13px', letterSpacing: '0.15em', color: '#c8baa6', marginBottom: '8px' }}>SMARTIME</div>
+          <h1 style={{ fontSize: '28px', color: '#4a3f35', margin: 0 }}>מערכת שעות חכמה</h1>
+          <div style={{ width: '40px', height: '1px', backgroundColor: '#8a9e78', margin: '16px auto 0' }}></div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4" dir="rtl">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+        <form onSubmit={handleSubmit}>
+          
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', fontSize: '12px', color: '#8a7a6e', marginBottom: '8px', letterSpacing: '0.05em' }}>
               תעודת זהות
             </label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="הכנס תעודת זהות"
               required
+              style={{
+                width: '100%', padding: '12px 16px', border: '1px solid #e2dacc',
+                borderRadius: '10px', fontSize: '14px', color: '#4a3f35',
+                backgroundColor: '#FAF7F2', outline: 'none', boxSizing: 'border-box'
+              }}
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+          <div style={{ marginBottom: '28px' }}>
+            <label style={{ display: 'block', fontSize: '12px', color: '#8a7a6e', marginBottom: '8px', letterSpacing: '0.05em' }}>
               סיסמה
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="הכנס סיסמה"
               required
+              style={{
+                width: '100%', padding: '12px 16px', border: '1px solid #e2dacc',
+                borderRadius: '10px', fontSize: '14px', color: '#4a3f35',
+                backgroundColor: '#FAF7F2', outline: 'none', boxSizing: 'border-box'
+              }}
             />
           </div>
 
           {error && (
-            <p className="text-red-500 text-sm text-center">{error}</p>
+            <p style={{ color: '#c0705a', fontSize: '13px', textAlign: 'center', marginBottom: '16px' }}>{error}</p>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 transition disabled:opacity-50"
+            style={{
+              width: '100%', padding: '13px', backgroundColor: '#8a9e78',
+              color: '#fff', border: 'none', borderRadius: '10px',
+              fontSize: '15px', cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.7 : 1, transition: 'opacity 0.2s'
+            }}
           >
-            {loading ? 'מתחבר...' : 'התחבר'}
+            {loading ? 'מתחבר...' : 'כניסה'}
           </button>
+
         </form>
       </div>
     </div>
