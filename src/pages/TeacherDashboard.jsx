@@ -1,9 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { updateTeacher, getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest } from '../services/api';
+import {
+  updateTeacher, getMyConstraints, createConstraint, deleteConstraint,
+  getActiveWindow, getMyRequests, createRequest, getMySchedule,
+} from '../services/api';
 
 const DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'];
 const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
+
+// Day 1 = Sunday ... 6 = Friday (matches the backend).
+const DAY_NAMES = { 1: 'ראשון', 2: 'שני', 3: 'שלישי', 4: 'רביעי', 5: 'חמישי', 6: 'שישי' };
+const DAY_ORDER = [1, 2, 3, 4, 5, 6];
 
 const REQUEST_TYPES = [
   { value: 'constraint_change', label: 'שינוי אילוץ' },
@@ -23,6 +30,10 @@ const styles = {
   input: { width: '100%', padding: '10px 14px', border: '1px solid #e2dacc', borderRadius: '8px', fontSize: '14px', color: '#4a3f35', backgroundColor: '#FAF7F2', outline: 'none', boxSizing: 'border-box', fontFamily: 'Varela Round, sans-serif' },
   label: { display: 'block', fontSize: '12px', color: '#8a7a6e', marginBottom: '6px' },
   btnSave: { backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', fontSize: '14px', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif' },
+  gridCell: { border: '1px solid #f0ebe3', padding: '6px', verticalAlign: 'top', height: '64px' },
+  gridHourCell: { border: '1px solid #f0ebe3', padding: '6px', textAlign: 'center', color: '#c8baa6', fontSize: '12px', backgroundColor: '#FAF7F2', whiteSpace: 'nowrap' },
+  gridHeadCell: { border: '1px solid #e2dacc', padding: '10px', textAlign: 'center', color: '#4a3f35', fontSize: '13px', backgroundColor: '#EDF4E8' },
+  lessonBox: { backgroundColor: '#F5F8F2', border: '1px solid #e3ecdb', borderRadius: '8px', padding: '6px 8px', fontSize: '12px', color: '#4a3f35', lineHeight: 1.4 },
 };
 
 const TABS = [
@@ -47,6 +58,12 @@ export default function TeacherDashboard() {
   const [profile, setProfile] = useState({ first_name: '', last_name: '', email: '', phone_number: '' });
   const [saved, setSaved] = useState(false);
 
+  // ---- my schedule ----
+  const [myEntries, setMyEntries] = useState([]);
+  const [myRun, setMyRun] = useState(null);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
+
   useEffect(() => {
     if (user) setProfile({ first_name: user.first_name, last_name: user.last_name, email: user.email, phone_number: user.phone_number || '' });
   }, [user]);
@@ -58,6 +75,14 @@ export default function TeacherDashboard() {
     }
     if (activeTab === 'requests') {
       getMyRequests().then(r => setRequests(r.data));
+    }
+    if (activeTab === 'schedule') {
+      setScheduleLoading(true);
+      setScheduleError('');
+      getMySchedule()
+        .then(r => { setMyEntries(r.data.entries || []); setMyRun(r.data.run || null); })
+        .catch(() => setScheduleError('שגיאה בטעינת מערכת השעות'))
+        .finally(() => setScheduleLoading(false));
     }
   }, [activeTab]);
 
@@ -75,6 +100,8 @@ export default function TeacherDashboard() {
     getMyRequests().then(r => setRequests(r.data));
     setTimeout(() => setRequestSent(false), 3000);
   };
+
+  const cell = (day, hour) => myEntries.filter(e => e.day_of_week === day && e.hour_of_day === hour);
 
   return (
     <div style={styles.layout}>
@@ -232,11 +259,49 @@ export default function TeacherDashboard() {
         )}
 
         {activeTab === 'schedule' && (
-          <div style={{ ...styles.card, minHeight: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ textAlign: 'center', color: '#c8baa6' }}>
-              <i className="ti ti-calendar" style={{ fontSize: '36px', display: 'block', marginBottom: '14px' }} aria-hidden="true"></i>
-              <div style={{ fontSize: '15px' }}>מערכת השעות תוצג כאן לאחר יצירתה</div>
-            </div>
+          <div style={styles.card}>
+            {scheduleLoading ? (
+              <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px' }}>טוען…</div>
+            ) : scheduleError ? (
+              <div style={{ textAlign: 'center', color: '#c0705a', padding: '40px' }}>{scheduleError}</div>
+            ) : !myRun ? (
+              <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px' }}>
+                <i className="ti ti-calendar" style={{ fontSize: '36px', display: 'block', marginBottom: '14px' }} aria-hidden="true"></i>
+                <div style={{ fontSize: '15px' }}>מערכת השעות עדיין לא פורסמה</div>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...styles.gridHeadCell, width: '60px' }}>שעה</th>
+                      {DAY_ORDER.map(d => <th key={d} style={styles.gridHeadCell}>{DAY_NAMES[d]}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {HOURS.map(hour => (
+                      <tr key={hour}>
+                        <td style={styles.gridHourCell}>שיעור {hour}</td>
+                        {DAY_ORDER.map(day => {
+                          const lessons = cell(day, hour);
+                          return (
+                            <td key={day} style={styles.gridCell}>
+                              {lessons.map((e, idx) => (
+                                <div key={idx} style={styles.lessonBox}>
+                                  <div style={{ fontWeight: 600 }}>{e.subject_name}</div>
+                                  <div style={{ color: '#8a7a6e' }}>{e.group_name}</div>
+                                  {e.room_name && <div style={{ color: '#a99', fontSize: '10px' }}>{e.room_name}</div>}
+                                </div>
+                              ))}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>
