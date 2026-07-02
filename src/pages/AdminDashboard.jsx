@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject,
   getStudentGroups, deleteStudentGroup,
-  runGeneration, getGenerationStatus, getCurrentSchedule,
+  runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule,
 } from '../services/api';
 import AddTeacherModal from '../components/AddTeacherModal';
 import AddRoomModal from '../components/AddRoomModal';
