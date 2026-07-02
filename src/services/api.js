@@ -68,4 +68,40 @@ export const getMyRequests = () => api.get('/teacher-requests/');
 export const createRequest = (data) => api.post('/teacher-requests/', data);
 export const respondToRequest = (id, data) => api.patch(`/teacher-requests/${id}/respond`, data);
 
+// ========================================================================
+// SmarTime generation/schedule backend (port 8001) — separate from 8000
+// ========================================================================
+const API2_URL = 'http://91.99.11.56:8001';
+
+// A second axios instance pointed at 8001, with its OWN token.
+const api2 = axios.create({
+  baseURL: API2_URL,
+  headers: { 'Content-Type': 'application/json' },
+});
+api2.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token8001');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+// Silent login to 8001 (same ID + password as 8000). Stores its token.
+export const login8001 = (username, password) =>
+  axios.post(`${API2_URL}/auth/login`, { username, password });
+
+// Generation (admin)
+export const runGeneration = () => api2.post('/generation/run');
+export const getGenerationStatus = (jobId) => api2.get(`/generation/${jobId}`);
+
+// Schedule display
+export const getCurrentSchedule = () => api2.get('/schedule/current'); // admin: whole school
+export const getMySchedule = () => api2.get('/schedule/me');           // teacher: own only
+
+// Password reset (no login needed)
+export const forgotPassword = (email) =>
+  axios.post(`${API2_URL}/auth/forgot-password`, { email });
+export const verifyResetCode = (email, code) =>
+  axios.post(`${API2_URL}/auth/verify-reset-code`, { email, code });
+export const setNewPassword = (email, code, password, confirm_password) =>
+  axios.post(`${API2_URL}/auth/set-new-password`, { email, code, password, confirm_password });
+
 export default api;
