@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { login, getMe } from '../services/api';
+import { login, getMe, login8001 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
@@ -21,6 +21,15 @@ export default function Login() {
       localStorage.setItem('token', token);
       const meRes = await getMe();
       loginUser(token, meRes.data);
+
+      // Also log in to the 8001 backend (same credentials), for generation
+      // and schedule. If it fails, the main login still works.
+      try {
+        const res2 = await login8001(username, password);
+        localStorage.setItem('token8001', res2.data.access_token);
+      } catch (e) {
+        console.warn('8001 login failed (generation/schedule may be unavailable)', e);
+      }
       if (meRes.data.is_admin) {
         navigate('/admin');
       } else {
