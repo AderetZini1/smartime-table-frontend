@@ -72,6 +72,8 @@ export default function AdminDashboard() {
   const [runInfo, setRunInfo] = useState(null);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [publishMsg, setPublishMsg] = useState('');
   const [genError, setGenError] = useState('');
   const [filterType, setFilterType] = useState('class'); // class | teacher | subject | grade
   const [filterValue, setFilterValue] = useState('');
@@ -139,6 +141,20 @@ export default function AdminDashboard() {
       }
     }
   };
+
+  const handlePublish = async () => {
+     setPublishing(true);
+     setPublishMsg('');
+     try {
+       await publishSchedule();
+       setPublishMsg('פורסם לצוות ✓');
+       await loadSchedule();
+     } catch (e) {
+       setPublishMsg('שגיאה בפרסום');
+     } finally {
+       setPublishing(false);
+     }
+   };
 
   const handleDelete = async (type, id) => {
     if (!window.confirm('למחוק?')) return;
@@ -352,6 +368,15 @@ export default function AdminDashboard() {
                   <i className={`ti ${generating ? 'ti-loader' : 'ti-wand'}`} aria-hidden="true"></i>
                   {generating ? 'בתהליך יצירה…' : 'צור מערכת שעות'}
                 </button>
+                <button
+                  onClick={handlePublish}
+                  disabled={publishing || !runInfo}
+                  style={{ ...styles.btnAdd, backgroundColor: '#5a8ac0', marginRight: '10px', opacity: (publishing || !runInfo) ? 0.6 : 1, cursor: (publishing || !runInfo) ? 'not-allowed' : 'pointer' }}
+                >
+                  <i className="ti ti-send" aria-hidden="true"></i>
+                  {publishing ? 'מפרסם…' : (runInfo?.is_published ? 'פרסם מחדש' : 'פרסם לצוות')}
+                </button>
+                {publishMsg && <div style={{ fontSize: '13px', color: '#6b8f5e', marginTop: '8px' }}>{publishMsg}</div>}
                 {generating && (
                   <div style={{ fontSize: '12px', color: '#8a7a6e', marginTop: '8px' }}>
                     היצירה עשויה לקחת עד כ-3 דקות. אפשר להמתין כאן.
