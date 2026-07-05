@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { updateTeacher, getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule } from '../services/api';
+import { getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule } from '../services/api';
 
 const DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'];
 const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -19,13 +19,11 @@ const REQUEST_TYPES = [
 
 const CELL_COLORS = {
   free: { bg: '#f5f2ee', border: '#e2dacc', icon: null },
-  preferred: { bg: '#EDF4E8', border: '#c5dab8', icon: 'ti-heart', color: '#6b9450' },
   preferred_not: { bg: '#FFF3A3', border: '#e8d88a', icon: 'ti-minus', color: '#a08c30' },
   unavailable: { bg: '#FAE8E8', border: '#e8c0b0', icon: 'ti-x', color: '#c0705a' },
 };
 
-const CYCLE_ORDER = ['preferred', 'preferred_not', 'unavailable'];
-const STATE_LABELS = { preferred: 'מעדיף שעה זו', preferred_not: 'מעדיף שלא', unavailable: 'לא יכול' };
+const STATE_LABELS = { preferred_not: 'מעדיף שלא', unavailable: 'לא יכול' };
 
 const styles = {
   layout: { display: 'flex', backgroundColor: '#FAF7F2', minHeight: '100vh', direction: 'rtl' },
@@ -37,6 +35,7 @@ const styles = {
   card: { backgroundColor: '#fff', borderRadius: '14px', border: '1px solid #e2dacc', padding: '24px', marginBottom: '24px' },
   input: { width: '100%', padding: '10px 14px', border: '1px solid #e2dacc', borderRadius: '8px', fontSize: '14px', color: '#4a3f35', backgroundColor: '#FAF7F2', outline: 'none', boxSizing: 'border-box', fontFamily: 'Varela Round, sans-serif' },
   label: { display: 'block', fontSize: '12px', color: '#8a7a6e', marginBottom: '6px' },
+  readonlyField: { width: '100%', padding: '10px 14px', border: '1px solid #f0ebe3', borderRadius: '8px', fontSize: '14px', color: '#4a3f35', backgroundColor: '#f9f6f1', boxSizing: 'border-box' },
   btnSave: { backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', fontSize: '14px', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif' },
   btnOutline: { backgroundColor: 'transparent', color: '#8a7a6e', border: '1px solid #e2dacc', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif' },
   chipBtn: (selected) => ({ padding: '6px 14px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer', backgroundColor: selected ? '#8a9e78' : '#f5f2ee', color: selected ? '#fff' : '#8a7a6e', border: `1px solid ${selected ? '#8a9e78' : '#e2dacc'}`, fontFamily: 'Varela Round, sans-serif' }),
@@ -114,7 +113,6 @@ export default function TeacherDashboard() {
   const [newRequest, setNewRequest] = useState({ request_type: 'constraint_change', description: '' });
   const [requestSent, setRequestSent] = useState(false);
   const [profile, setProfile] = useState({ first_name: '', last_name: '', email: '', phone_number: '' });
-  const [saved, setSaved] = useState(false);
   const [hasNewNotification, setHasNewNotification] = useState(false);
   const prevAnsweredCount = useRef(0);
   const [subjects, setSubjects] = useState([]);
@@ -198,27 +196,18 @@ export default function TeacherDashboard() {
     return () => clearInterval(interval);
   }, [activeTab]);
 
-  const handleSaveProfile = async () => {
-    await updateTeacher(user.id, profile);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
-
   const handleCellClick = async (dayIdx, hour) => {
     const key = `${dayIdx}-${hour}`;
     const current = cellStates[key];
     const timeslot_id = dayIdx * 8 + hour;
 
+    // empty -> prefers-not (soft) -> cannot (hard) -> empty
     if (!current) {
-      const res = await createConstraint({ teacher_id: user.id, timeslot_id, weight: 1, constraint_type: 'preferred' });
-      setCellStates(prev => ({ ...prev, [key]: { state: 'preferred', id: res.data.id, reason: '' } }));
-    } else if (current.state === 'preferred') {
-      await deleteConstraint(current.id);
-      const res = await createConstraint({ teacher_id: user.id, timeslot_id, weight: 3, constraint_type: 'preferred_not' });
+      const res = await createConstraint({ teacher_id: user.id, timeslot_id, weight: 1, constraint_type: 'preferred_not' });
       setCellStates(prev => ({ ...prev, [key]: { state: 'preferred_not', id: res.data.id, reason: '' } }));
     } else if (current.state === 'preferred_not') {
       await deleteConstraint(current.id);
-      const res = await createConstraint({ teacher_id: user.id, timeslot_id, weight: 10, constraint_type: 'unavailable' });
+      const res = await createConstraint({ teacher_id: user.id, timeslot_id, weight: 10000, constraint_type: 'unavailable' });
       setReasonModal({ dayIdx, hour, constraintId: res.data.id, reason: '' });
       setCellStates(prev => ({ ...prev, [key]: { state: 'unavailable', id: res.data.id, reason: '' } }));
     } else {
@@ -240,7 +229,7 @@ export default function TeacherDashboard() {
       return;
     }
 
-    const weightByState = { preferred: 1, preferred_not: 3, unavailable: 10 };
+    const weightByState = { preferred_not: 1, unavailable: 10000 };
     const res = await createConstraint({ teacher_id: user.id, timeslot_id, weight: weightByState[targetState], constraint_type: targetState });
     setCellStates(prev => ({ ...prev, [key]: { state: targetState, id: res.data.id, reason: '' } }));
     setQuickPick(null);
@@ -330,27 +319,26 @@ export default function TeacherDashboard() {
         {/* פרופיל */}
         {activeTab === 'profile' && (
           <div style={styles.card}>
+            <div style={{ fontSize: '12px', color: '#c8baa6', marginBottom: '18px' }}>
+              הפרטים האישיים ניתנים לצפייה בלבד. לעדכון פרטים, יש לפנות למנהל/ת המערכת.
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
               <div>
                 <label style={styles.label}>שם פרטי</label>
-                <input style={styles.input} value={profile.first_name} onChange={e => setProfile({ ...profile, first_name: e.target.value })} />
+                <div style={styles.readonlyField}>{profile.first_name || '—'}</div>
               </div>
               <div>
                 <label style={styles.label}>שם משפחה</label>
-                <input style={styles.input} value={profile.last_name} onChange={e => setProfile({ ...profile, last_name: e.target.value })} />
+                <div style={styles.readonlyField}>{profile.last_name || '—'}</div>
               </div>
             </div>
             <div style={{ marginBottom: '16px' }}>
               <label style={styles.label}>אימייל</label>
-              <input style={styles.input} value={profile.email} onChange={e => setProfile({ ...profile, email: e.target.value })} />
+              <div style={styles.readonlyField}>{profile.email || '—'}</div>
             </div>
-            <div style={{ marginBottom: '24px' }}>
+            <div>
               <label style={styles.label}>טלפון</label>
-              <input style={styles.input} value={profile.phone_number} onChange={e => setProfile({ ...profile, phone_number: e.target.value })} placeholder="05X-XXXXXXX" />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <button onClick={handleSaveProfile} style={styles.btnSave}>שמור שינויים</button>
-              {saved && <span style={{ fontSize: '13px', color: '#8a9e78' }}>✓ נשמר בהצלחה</span>}
+              <div style={styles.readonlyField}>{profile.phone_number || '—'}</div>
             </div>
           </div>
         )}
@@ -459,7 +447,7 @@ export default function TeacherDashboard() {
                     <div>
                       <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '4px' }}>סמן זמינות</div>
                       <div style={{ fontSize: '12px', color: '#8a7a6e' }}>
-                        סמנו את זמינותכם בעזרת קליק על התא הרצוי: לחיצה אחת - מעדיף ללמד בשעה זו (ירוק), לחיצה שנייה - מעדיף שלא (צהוב), לחיצה שלישית - לא יכול כלל (אדום), ולחיצה רביעית מנקה את הסימון.
+                        סמנו את המגבלות שלכם בקליק על התא: תא ריק = פנוי ללמד. לחיצה אחת - מעדיף שלא (צהוב, מגבלה רכה), לחיצה שנייה - לא יכול כלל (אדום, מגבלה קשיחה), ולחיצה שלישית מנקה את הסימון וחוזרת למצב "פנוי".
                       </div>
                       <div style={{ fontSize: '12px', color: '#8a7a6e', marginTop: '4px' }}>
                         לבחירה ישירה ומהירה, ניתן ללחוץ קליק ימני על התא ולבחור את האפשרות הרצויה מהתפריט.
@@ -467,16 +455,12 @@ export default function TeacherDashboard() {
                     </div>
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#8a7a6e' }}>
-                        <div style={{ width: '14px', height: '14px', borderRadius: '4px', backgroundColor: '#EDF4E8', border: '1px solid #c5dab8' }}></div>
-                        מעדיף
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#8a7a6e' }}>
                         <div style={{ width: '14px', height: '14px', borderRadius: '4px', backgroundColor: '#FFF3A3', border: '1px solid #e8d88a' }}></div>
-                        מעדיף שלא
+                        מעדיף שלא (רך)
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#8a7a6e' }}>
                         <div style={{ width: '14px', height: '14px', borderRadius: '4px', backgroundColor: '#FAE8E8', border: '1px solid #e8c0b0' }}></div>
-                        לא יכול
+                        לא יכול (קשיח)
                       </div>
                     </div>
                   </div>
@@ -715,7 +699,7 @@ export default function TeacherDashboard() {
               width: '170px',
             }}
           >
-            {['preferred', 'preferred_not', 'unavailable', 'free'].map(state => {
+            {['preferred_not', 'unavailable', 'free'].map(state => {
               const isFree = state === 'free';
               const colors = isFree ? { color: '#8a7a6e' } : CELL_COLORS[state];
               return (
