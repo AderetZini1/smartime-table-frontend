@@ -1,15 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import {
-  updateTeacher, getMyConstraints, createConstraint, deleteConstraint,
-  getActiveWindow, getMyRequests, createRequest, getMySchedule,
-} from '../services/api';
+import { updateTeacher, getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule } from '../services/api';
 
 const DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'];
 const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
+const GRADES = [1, 2, 3, 4, 5, 6];
+const GRADE_LABELS = { 1: "א'", 2: "ב'", 3: "ג'", 4: "ד'", 5: "ה'", 6: "ו'" };
 
-// Day 1 = Sunday ... 6 = Friday (matches the backend).
-const DAY_NAMES = { 1: 'ראשון', 2: 'שני', 3: 'שלישי', 4: 'רביעי', 5: 'חמישי', 6: 'שישי' };
+// For the "my schedule" grid: day_of_week 1..6 -> Hebrew name
+const DAY_NAMES_BY_NUM = { 1: 'ראשון', 2: 'שני', 3: 'שלישי', 4: 'רביעי', 5: 'חמישי', 6: 'שישי' };
 const DAY_ORDER = [1, 2, 3, 4, 5, 6];
 
 const REQUEST_TYPES = [
@@ -18,18 +17,29 @@ const REQUEST_TYPES = [
   { value: 'general', label: 'פנייה כללית' },
 ];
 
+const CELL_COLORS = {
+  free: { bg: '#f5f2ee', border: '#e2dacc', icon: null },
+  preferred: { bg: '#EDF4E8', border: '#c5dab8', icon: 'ti-heart', color: '#6b9450' },
+  preferred_not: { bg: '#FFF3A3', border: '#e8d88a', icon: 'ti-minus', color: '#a08c30' },
+  unavailable: { bg: '#FAE8E8', border: '#e8c0b0', icon: 'ti-x', color: '#c0705a' },
+};
+
+const CYCLE_ORDER = ['preferred', 'preferred_not', 'unavailable'];
+const STATE_LABELS = { preferred: 'מעדיף שעה זו', preferred_not: 'מעדיף שלא', unavailable: 'לא יכול' };
+
 const styles = {
   layout: { display: 'flex', backgroundColor: '#FAF7F2', minHeight: '100vh', direction: 'rtl' },
   sidebar: { width: '240px', backgroundColor: '#fff', borderLeft: '1px solid #e2dacc', display: 'flex', flexDirection: 'column', padding: '28px 0', flexShrink: 0 },
   brand: { fontSize: '11px', letterSpacing: '0.14em', color: '#c8baa6', marginBottom: '4px' },
   brandName: { fontSize: '17px', color: '#4a3f35' },
   navItem: (active) => ({ padding: '13px 24px', fontSize: '15px', color: active ? '#4a3f35' : '#8a7a6e', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', borderRight: active ? '3px solid #8a9e78' : '3px solid transparent', backgroundColor: active ? '#FAF7F2' : 'transparent', border: 'none', width: '100%', textAlign: 'right', fontFamily: 'Varela Round, sans-serif' }),
-  divider: { margin: '12px 24px', borderBottom: '1px solid #e2dacc' },
   main: { flex: 1, padding: '40px 48px' },
   card: { backgroundColor: '#fff', borderRadius: '14px', border: '1px solid #e2dacc', padding: '24px', marginBottom: '24px' },
   input: { width: '100%', padding: '10px 14px', border: '1px solid #e2dacc', borderRadius: '8px', fontSize: '14px', color: '#4a3f35', backgroundColor: '#FAF7F2', outline: 'none', boxSizing: 'border-box', fontFamily: 'Varela Round, sans-serif' },
   label: { display: 'block', fontSize: '12px', color: '#8a7a6e', marginBottom: '6px' },
   btnSave: { backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', fontSize: '14px', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif' },
+  btnOutline: { backgroundColor: 'transparent', color: '#8a7a6e', border: '1px solid #e2dacc', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif' },
+  chipBtn: (selected) => ({ padding: '6px 14px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer', backgroundColor: selected ? '#8a9e78' : '#f5f2ee', color: selected ? '#fff' : '#8a7a6e', border: `1px solid ${selected ? '#8a9e78' : '#e2dacc'}`, fontFamily: 'Varela Round, sans-serif' }),
   gridCell: { border: '1px solid #f0ebe3', padding: '6px', verticalAlign: 'top', height: '64px' },
   gridHourCell: { border: '1px solid #f0ebe3', padding: '6px', textAlign: 'center', color: '#c8baa6', fontSize: '12px', backgroundColor: '#FAF7F2', whiteSpace: 'nowrap' },
   gridHeadCell: { border: '1px solid #e2dacc', padding: '10px', textAlign: 'center', color: '#4a3f35', fontSize: '13px', backgroundColor: '#EDF4E8' },
@@ -46,6 +56,54 @@ const TABS = [
 const statusLabel = (s) => ({ pending: 'ממתין', approved: 'אושר', rejected: 'נדחה' }[s] || s);
 const statusColor = (s) => ({ pending: '#c8baa6', approved: '#8a9e78', rejected: '#c0705a' }[s] || '#c8baa6');
 
+// ── קומפוננטה: רשת מקצועות עם checkboxes ──────────────────────────────────
+function SubjectCheckboxGrid({ subjects, mySubjects, onToggle }) {
+  const columns = [[], [], []];
+  subjects.forEach((s, i) => columns[i % 3].push(s));
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 24px', marginTop: '8px' }}>
+      {columns.map((col, colIdx) => (
+        <div key={colIdx}>
+          {col.map(subject => {
+            const selected = mySubjects.includes(subject.id);
+            return (
+              <label
+                key={subject.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px',
+                  borderRadius: '8px', cursor: 'pointer', marginBottom: '4px',
+                  backgroundColor: selected ? '#EDF4E8' : 'transparent',
+                  transition: 'background-color 0.12s', userSelect: 'none',
+                }}
+                onMouseEnter={e => { if (!selected) e.currentTarget.style.backgroundColor = '#f5f2ee'; }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = selected ? '#EDF4E8' : 'transparent'; }}
+              >
+                <span style={{
+                  width: '18px', height: '18px', borderRadius: '5px', flexShrink: 0,
+                  border: `1.5px solid ${selected ? '#8a9e78' : '#c8baa6'}`,
+                  backgroundColor: selected ? '#8a9e78' : '#FAF7F2',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.12s',
+                }}
+                  onClick={() => onToggle(subject)}
+                >
+                  {selected && <i className="ti ti-check" style={{ fontSize: '12px', color: '#fff' }} aria-hidden="true" />}
+                </span>
+                <span
+                  style={{ fontSize: '14px', color: selected ? '#4a3f35' : '#8a7a6e', transition: 'color 0.12s' }}
+                  onClick={() => onToggle(subject)}
+                >
+                  {subject.subject_name}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function TeacherDashboard() {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
@@ -57,8 +115,26 @@ export default function TeacherDashboard() {
   const [requestSent, setRequestSent] = useState(false);
   const [profile, setProfile] = useState({ first_name: '', last_name: '', email: '', phone_number: '' });
   const [saved, setSaved] = useState(false);
+  const [hasNewNotification, setHasNewNotification] = useState(false);
+  const prevAnsweredCount = useRef(0);
+  const [subjects, setSubjects] = useState([]);
+  const [mySubjects, setMySubjects] = useState([]);
+  const [myGradeLevels, setMyGradeLevels] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [homeroomPref, setHomeroomPref] = useState({ wants_homeroom: null, preferred_group_id: null });
+  const [cellStates, setCellStates] = useState({});
+  const [reasonModal, setReasonModal] = useState(null);
+  const [quickPick, setQuickPick] = useState(null);
+  const [freeText, setFreeText] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiPreview, setAiPreview] = useState(null);
+  const [preferences, setPreferences] = useState({
+    min_hours: 18, weekly_hours_quota: 24, max_hours: 26,
+    preferred_consecutive: false,
+    priority_early_finish: 3, priority_no_gaps: 3, priority_free_day: 3, priority_consecutive: 3,
+  });
 
-  // ---- my schedule ----
+  // ---- my published schedule (port 8001) ----
   const [myEntries, setMyEntries] = useState([]);
   const [myRun, setMyRun] = useState(null);
   const [scheduleLoading, setScheduleLoading] = useState(false);
@@ -69,12 +145,36 @@ export default function TeacherDashboard() {
   }, [user]);
 
   useEffect(() => {
+    getSubjects().then(r => setSubjects(r.data)).catch(() => {});
+    getMySubjects().then(r => setMySubjects(r.data.map(s => s.subject_id))).catch(() => {});
+    getStudentGroups().then(r => setGroups(r.data)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (activeTab === 'constraints') {
       getActiveWindow().then(r => { setActiveWindow(r.data); setWindowLoaded(true); }).catch(() => { setActiveWindow(null); setWindowLoaded(true); });
-      getMyConstraints().then(r => setConstraints(r.data));
+      getMyConstraints().then(r => {
+        setConstraints(r.data);
+        const states = {};
+        r.data.forEach(c => {
+          const key = `${Math.floor((c.timeslot_id - 1) / 8)}-${((c.timeslot_id - 1) % 8) + 1}`;
+          states[key] = { state: c.constraint_type || 'unavailable', id: c.id, reason: c.reason || '' };
+        });
+        setCellStates(states);
+      });
+      getMyGradeLevels().then(r => setMyGradeLevels(r.data.map(g => g.grade_level))).catch(() => {});
+      getMyHomeroomPref().then(r => {
+        if (r.data && r.data.id) {
+          setHomeroomPref({
+            wants_homeroom: r.data.wants_homeroom ?? null,
+            preferred_group_id: r.data.preferred_group_id ?? null,
+          });
+        }
+      }).catch(() => {});
     }
     if (activeTab === 'requests') {
       getMyRequests().then(r => setRequests(r.data));
+      setHasNewNotification(false);
     }
     if (activeTab === 'schedule') {
       setScheduleLoading(true);
@@ -86,10 +186,74 @@ export default function TeacherDashboard() {
     }
   }, [activeTab]);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      getMyRequests().then(r => {
+        const answered = r.data.filter(req => req.status !== 'pending' && req.admin_response);
+        if (answered.length > prevAnsweredCount.current) setHasNewNotification(true);
+        prevAnsweredCount.current = answered.length;
+        if (activeTab === 'requests') setRequests(r.data);
+      }).catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [activeTab]);
+
   const handleSaveProfile = async () => {
     await updateTeacher(user.id, profile);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleCellClick = async (dayIdx, hour) => {
+    const key = `${dayIdx}-${hour}`;
+    const current = cellStates[key];
+    const timeslot_id = dayIdx * 8 + hour;
+
+    if (!current) {
+      const res = await createConstraint({ teacher_id: user.id, timeslot_id, weight: 1, constraint_type: 'preferred' });
+      setCellStates(prev => ({ ...prev, [key]: { state: 'preferred', id: res.data.id, reason: '' } }));
+    } else if (current.state === 'preferred') {
+      await deleteConstraint(current.id);
+      const res = await createConstraint({ teacher_id: user.id, timeslot_id, weight: 3, constraint_type: 'preferred_not' });
+      setCellStates(prev => ({ ...prev, [key]: { state: 'preferred_not', id: res.data.id, reason: '' } }));
+    } else if (current.state === 'preferred_not') {
+      await deleteConstraint(current.id);
+      const res = await createConstraint({ teacher_id: user.id, timeslot_id, weight: 10, constraint_type: 'unavailable' });
+      setReasonModal({ dayIdx, hour, constraintId: res.data.id, reason: '' });
+      setCellStates(prev => ({ ...prev, [key]: { state: 'unavailable', id: res.data.id, reason: '' } }));
+    } else {
+      await deleteConstraint(current.id);
+      setCellStates(prev => { const next = { ...prev }; delete next[key]; return next; });
+    }
+  };
+
+  const handleQuickPick = async (dayIdx, hour, targetState) => {
+    const key = `${dayIdx}-${hour}`;
+    const current = cellStates[key];
+    const timeslot_id = dayIdx * 8 + hour;
+
+    if (current) await deleteConstraint(current.id);
+
+    if (targetState === 'free') {
+      setCellStates(prev => { const next = { ...prev }; delete next[key]; return next; });
+      setQuickPick(null);
+      return;
+    }
+
+    const weightByState = { preferred: 1, preferred_not: 3, unavailable: 10 };
+    const res = await createConstraint({ teacher_id: user.id, timeslot_id, weight: weightByState[targetState], constraint_type: targetState });
+    setCellStates(prev => ({ ...prev, [key]: { state: targetState, id: res.data.id, reason: '' } }));
+    setQuickPick(null);
+    if (targetState === 'unavailable') {
+      setReasonModal({ dayIdx, hour, constraintId: res.data.id, reason: '' });
+    }
+  };
+
+  const handleSaveReason = () => {
+    if (!reasonModal) return;
+    const key = `${reasonModal.dayIdx}-${reasonModal.hour}`;
+    setCellStates(prev => ({ ...prev, [key]: { ...prev[key], reason: reasonModal.reason } }));
+    setReasonModal(null);
   };
 
   const handleSendRequest = async () => {
@@ -101,7 +265,37 @@ export default function TeacherDashboard() {
     setTimeout(() => setRequestSent(false), 3000);
   };
 
-  const cell = (day, hour) => myEntries.filter(e => e.day_of_week === day && e.hour_of_day === hour);
+  const handleSaveHomeroomPref = async () => {
+    await saveMyHomeroomPref(homeroomPref);
+  };
+
+  const handleToggleSubject = async (subject) => {
+    const selected = mySubjects.includes(subject.id);
+    if (selected) {
+      await removeMySubject(subject.id);
+      setMySubjects(prev => prev.filter(id => id !== subject.id));
+    } else {
+      await addMySubject(subject.id);
+      setMySubjects(prev => [...prev, subject.id]);
+    }
+  };
+
+  const scheduleCell = (day, hour) => myEntries.filter(e => e.day_of_week === day && e.hour_of_day === hour);
+
+  const PrioritySlider = ({ label, field }) => (
+    <div style={{ marginBottom: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+        <label style={styles.label}>{label}</label>
+        <span style={{ fontSize: '13px', color: '#8a9e78', fontWeight: 'bold' }}>{preferences[field]}/5</span>
+      </div>
+      <input type="range" min="1" max="5" value={preferences[field]}
+        onChange={e => setPreferences(prev => ({ ...prev, [field]: parseInt(e.target.value) }))}
+        style={{ width: '100%', accentColor: '#8a9e78' }} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#c8baa6' }}>
+        <span>לא חשוב</span><span>חשוב מאוד</span>
+      </div>
+    </div>
+  );
 
   return (
     <div style={styles.layout}>
@@ -115,6 +309,9 @@ export default function TeacherDashboard() {
             <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={styles.navItem(activeTab === tab.id)}>
               <i className={`ti ${tab.icon}`} style={{ fontSize: '18px' }} aria-hidden="true"></i>
               {tab.label}
+              {tab.id === 'requests' && hasNewNotification && (
+                <span style={{ marginRight: 'auto', backgroundColor: '#FAE8E8', color: '#c0705a', borderRadius: '10px', padding: '2px 8px', fontSize: '12px' }}>!</span>
+              )}
             </button>
           ))}
         </nav>
@@ -130,6 +327,7 @@ export default function TeacherDashboard() {
           <div style={{ width: '28px', height: '1.5px', backgroundColor: '#8a9e78', marginTop: '8px' }}></div>
         </div>
 
+        {/* פרופיל */}
         {activeTab === 'profile' && (
           <div style={styles.card}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
@@ -157,6 +355,7 @@ export default function TeacherDashboard() {
           </div>
         )}
 
+        {/* העדפות שעות */}
         {activeTab === 'constraints' && (
           <>
             {!windowLoaded ? (
@@ -173,49 +372,225 @@ export default function TeacherDashboard() {
                 </div>
               </div>
             ) : (
-              <div style={styles.card}>
-                <div style={{ backgroundColor: '#EDF4E8', borderRadius: '8px', padding: '10px 16px', marginBottom: '20px', fontSize: '13px', color: '#6b8f5e' }}>
-                  <i className="ti ti-clock" aria-hidden="true"></i> {activeWindow.title} — פתוח עד {new Date(activeWindow.end_date).toLocaleDateString('he-IL')}
+              <>
+                <div style={styles.card}>
+                  <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '20px' }}>נתוני הוראה</div>
+
+                  <div style={{ marginBottom: '24px' }}>
+                    <label style={{ ...styles.label, fontSize: '13px', marginBottom: '2px' }}>מקצועות שאני מלמד</label>
+                    <div style={{ fontSize: '11px', color: '#c8baa6', marginBottom: '8px' }}>
+                      {mySubjects.length === 0 ? 'לא נבחרו מקצועות' : `${mySubjects.length} מקצועות נבחרו`}
+                    </div>
+                    {subjects.length === 0 ? (
+                      <div style={{ fontSize: '13px', color: '#c8baa6', padding: '12px 0' }}>טוען מקצועות...</div>
+                    ) : (
+                      <SubjectCheckboxGrid subjects={subjects} mySubjects={mySubjects} onToggle={handleToggleSubject} />
+                    )}
+                  </div>
+
+                  <div style={{ borderTop: '1px solid #f0ebe3', margin: '4px 0 20px' }} />
+
+                  <div style={{ marginBottom: '24px' }}>
+                    <label style={{ ...styles.label, fontSize: '13px' }}>סמן/י את שכבות הגיל (א'-ו') שבהן תרצה ללמד. ניתן לבחור יותר מאחת. </label>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                      {GRADES.map(grade => {
+                        const selected = myGradeLevels.includes(grade);
+                        return (
+                          <button key={grade} onClick={async () => {
+                            if (selected) { await removeMyGradeLevel(grade); setMyGradeLevels(prev => prev.filter(g => g !== grade)); }
+                            else { await addMyGradeLevel(grade); setMyGradeLevels(prev => [...prev, grade]); }
+                          }} style={styles.chipBtn(selected)}>
+                            כיתה {GRADE_LABELS[grade]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div style={{ borderTop: '1px solid #f0ebe3', margin: '4px 0 20px' }} />
+
+                  <div>
+                    <label style={{ ...styles.label, fontSize: '13px' }}>חינוך</label>
+                    <div style={{ fontSize: '11px', color: '#c8baa6', marginBottom: '10px' }}>
+                      האם תרצה לשמש כמחנך השנה?
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                      <button
+                        onClick={() => setHomeroomPref(p => ({ ...p, wants_homeroom: true }))}
+                        style={styles.chipBtn(homeroomPref.wants_homeroom === true)}
+                      >
+                        כן, אני רוצה לחנך
+                      </button>
+                      <button
+                        onClick={() => setHomeroomPref(p => ({ ...p, wants_homeroom: false, preferred_group_id: null }))}
+                        style={styles.chipBtn(homeroomPref.wants_homeroom === false)}
+                      >
+                        לא
+                      </button>
+                    </div>
+
+                    {homeroomPref.wants_homeroom === true && (
+                      <div style={{ backgroundColor: '#f5f2ee', borderRadius: '10px', padding: '16px', marginBottom: '16px' }}>
+                        <label style={{ ...styles.label, fontSize: '13px' }}>כיתה מועדפת לחינוך</label>
+                        <div style={{ fontSize: '11px', color: '#c8baa6', marginBottom: '10px' }}>
+                          אם אין העדפה, השאר ריק
+                        </div>
+                        <select
+                          value={homeroomPref.preferred_group_id || ''}
+                          onChange={e => setHomeroomPref(p => ({ ...p, preferred_group_id: e.target.value ? parseInt(e.target.value) : null }))}
+                          style={{ ...styles.input, cursor: 'pointer' }}
+                        >
+                          <option value="">אין העדפה מיוחדת</option>
+                          {groups.map(g => (
+                            <option key={g.id} value={g.id}>{g.group_name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    <button onClick={handleSaveHomeroomPref} style={{ ...styles.btnSave, fontSize: '13px', padding: '8px 16px' }}>
+                      שמור העדפות חינוך
+                    </button>
+                  </div>
                 </div>
-                <p style={{ fontSize: '13px', color: '#8a7a6e', marginBottom: '20px' }}>לחצי על שעה כדי לסמן אותה כלא מועדפת.</p>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                    <thead>
-                      <tr>
-                        <th style={{ padding: '8px 12px', color: '#c8baa6', fontWeight: 'normal', textAlign: 'right' }}>שעה / יום</th>
-                        {DAYS.map(d => <th key={d} style={{ padding: '8px 12px', color: '#4a3f35', fontWeight: 'normal', textAlign: 'center', minWidth: '70px' }}>{d}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {HOURS.map(hour => (
-                        <tr key={hour}>
-                          <td style={{ padding: '8px 12px', color: '#c8baa6' }}>שיעור {hour}</td>
-                          {DAYS.map((day, dayIdx) => {
-                            const constrained = constraints.find(c => c.timeslot_id === (dayIdx * 8 + hour));
-                            return (
-                              <td key={day} style={{ padding: '4px 8px', textAlign: 'center' }}>
-                                <div
-                                  onClick={() => constrained
-                                    ? deleteConstraint(constrained.id).then(() => setConstraints(prev => prev.filter(c => c.id !== constrained.id)))
-                                    : createConstraint({ teacher_id: user.id, timeslot_id: dayIdx * 8 + hour, weight: 5 }).then(r => setConstraints(prev => [...prev, r.data]))
-                                  }
-                                  style={{ width: '36px', height: '36px', borderRadius: '8px', margin: '0 auto', cursor: 'pointer', backgroundColor: constrained ? '#FAE8E8' : '#f5f2ee', border: `1px solid ${constrained ? '#e8c0b0' : '#e2dacc'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
-                                >
-                                  {constrained && <i className="ti ti-x" style={{ fontSize: '13px', color: '#c0705a' }} aria-hidden="true"></i>}
-                                </div>
-                              </td>
-                            );
-                          })}
+
+                <div style={styles.card}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <div>
+                      <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '4px' }}>סמן זמינות</div>
+                      <div style={{ fontSize: '12px', color: '#8a7a6e' }}>
+                        סמנו את זמינותכם בעזרת קליק על התא הרצוי: לחיצה אחת - מעדיף ללמד בשעה זו (ירוק), לחיצה שנייה - מעדיף שלא (צהוב), לחיצה שלישית - לא יכול כלל (אדום), ולחיצה רביעית מנקה את הסימון.
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#8a7a6e', marginTop: '4px' }}>
+                        לבחירה ישירה ומהירה, ניתן ללחוץ קליק ימני על התא ולבחור את האפשרות הרצויה מהתפריט.
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#8a7a6e' }}>
+                        <div style={{ width: '14px', height: '14px', borderRadius: '4px', backgroundColor: '#EDF4E8', border: '1px solid #c5dab8' }}></div>
+                        מעדיף
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#8a7a6e' }}>
+                        <div style={{ width: '14px', height: '14px', borderRadius: '4px', backgroundColor: '#FFF3A3', border: '1px solid #e8d88a' }}></div>
+                        מעדיף שלא
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#8a7a6e' }}>
+                        <div style={{ width: '14px', height: '14px', borderRadius: '4px', backgroundColor: '#FAE8E8', border: '1px solid #e8c0b0' }}></div>
+                        לא יכול
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ padding: '8px 12px', color: '#c8baa6', fontWeight: 'normal', textAlign: 'right' }}>שעה / יום</th>
+                          {DAYS.map(d => <th key={d} style={{ padding: '8px 12px', color: '#4a3f35', fontWeight: 'normal', textAlign: 'center', minWidth: '70px' }}>{d}</th>)}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {HOURS.map(hour => (
+                          <tr key={hour}>
+                            <td style={{ padding: '8px 12px', color: '#c8baa6', whiteSpace: 'nowrap' }}>שיעור {hour}</td>
+                            {DAYS.map((day, dayIdx) => {
+                              const key = `${dayIdx}-${hour}`;
+                              const cell = cellStates[key];
+                              const state = cell?.state || 'free';
+                              const colors = CELL_COLORS[state];
+                              return (
+                                <td key={day} style={{ padding: '4px 8px', textAlign: 'center' }}>
+                                  <div
+                                    onClick={() => handleCellClick(dayIdx, hour)}
+                                    onContextMenu={e => {
+                                      e.preventDefault();
+                                      setQuickPick({ dayIdx, hour, x: e.clientX, y: e.clientY });
+                                    }}
+                                    title={cell?.reason || 'לחיצה ימנית לבחירה ישירה'}
+                                    style={{ width: '40px', height: '40px', borderRadius: '8px', margin: '0 auto', cursor: 'pointer', backgroundColor: colors.bg, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', position: 'relative' }}>
+                                    {colors.icon && <i className={`ti ${colors.icon}`} style={{ fontSize: '14px', color: colors.color }} aria-hidden="true"></i>}
+                                    {cell?.reason && <div style={{ position: 'absolute', top: '2px', right: '2px', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#8a9e78' }}></div>}
+                                  </div>
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
+
+                <div style={styles.card}>
+                  <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '4px' }}>הזן אילוצים בשפה חופשית</div>
+                  <div style={{ fontSize: '12px', color: '#8a7a6e', marginBottom: '16px' }}>לדוגמה: "יש לי חופש ביום חמישי" או "לא יכול לפני שעה 2 ביום ראשון"</div>
+                  <textarea value={freeText} onChange={e => setFreeText(e.target.value)}
+                    style={{ ...styles.input, height: '80px', resize: 'vertical', marginBottom: '12px' }}
+                    placeholder="תאר את האילוצים שלך..." />
+                  <button onClick={async () => {
+                    if (!freeText.trim()) return;
+                    setAiLoading(true);
+                    try {
+                      const response = await fetch('/api/analyze-constraints', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                        body: JSON.stringify({ text: freeText })
+                      });
+                      const data = await response.json();
+                      setAiPreview(data.constraints);
+                    } catch (e) { console.error(e); }
+                    finally { setAiLoading(false); }
+                  }} style={{ ...styles.btnSave, opacity: aiLoading ? 0.7 : 1 }} disabled={aiLoading}>
+                    {aiLoading ? 'מנתח...' : 'נתח עם AI'}
+                  </button>
+                  {aiPreview && (
+                    <div style={{ marginTop: '16px', backgroundColor: '#EDF4E8', borderRadius: '8px', padding: '12px 16px' }}>
+                      <div style={{ fontSize: '13px', color: '#4a3f35', marginBottom: '8px' }}>זוהו האילוצים הבאים:</div>
+                      {aiPreview.map((c, i) => <div key={i} style={{ fontSize: '12px', color: '#6b8f5e', marginBottom: '4px' }}>• {c.description}</div>)}
+                      <button onClick={() => setAiPreview(null)} style={{ ...styles.btnSave, marginTop: '10px', fontSize: '12px', padding: '6px 14px' }}>אשר והוסף לגריד</button>
+                    </div>
+                  )}
+                </div>
+
+                <div style={styles.card}>
+                  <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '16px' }}>שעות שבועיות</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                    <div>
+                      <label style={styles.label}>מינימום שעות</label>
+                      <input type="number" min="1" max="40" value={preferences.min_hours} onChange={e => setPreferences(p => ({ ...p, min_hours: parseInt(e.target.value) }))} style={styles.input} />
+                    </div>
+                    <div>
+                      <label style={styles.label}>מכסת שעות (יעד)</label>
+                      <input type="number" min="1" max="40" value={preferences.weekly_hours_quota} onChange={e => setPreferences(p => ({ ...p, weekly_hours_quota: parseInt(e.target.value) }))} style={styles.input} />
+                    </div>
+                    <div>
+                      <label style={styles.label}>מקסימום שעות</label>
+                      <input type="number" min="1" max="40" value={preferences.max_hours} onChange={e => setPreferences(p => ({ ...p, max_hours: parseInt(e.target.value) }))} style={styles.input} />
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={styles.label}>העדפת שיעורים</label>
+                    <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                      <button onClick={() => setPreferences(p => ({ ...p, preferred_consecutive: true }))} style={styles.chipBtn(preferences.preferred_consecutive)}>רצופים</button>
+                      <button onClick={() => setPreferences(p => ({ ...p, preferred_consecutive: false }))} style={styles.chipBtn(!preferences.preferred_consecutive)}>עם הפסקות</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={styles.card}>
+                  <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '4px' }}>דרג עדיפויות</div>
+                  <div style={{ fontSize: '12px', color: '#8a7a6e', marginBottom: '20px' }}>מה הכי חשוב לך במערכת השעות שלך?</div>
+                  <PrioritySlider label="סיום מוקדם" field="priority_early_finish" />
+                  <PrioritySlider label="הימנעות מחלונות" field="priority_no_gaps" />
+                  <PrioritySlider label="יום חופשי" field="priority_free_day" />
+                  <PrioritySlider label="שיעורים רצופים" field="priority_consecutive" />
+                  <button onClick={() => {}} style={styles.btnSave}>שמור העדפות</button>
+                </div>
+              </>
             )}
           </>
         )}
 
+        {/* פניות */}
         {activeTab === 'requests' && (
           <>
             <div style={styles.card}>
@@ -235,7 +610,6 @@ export default function TeacherDashboard() {
                 {requestSent && <span style={{ fontSize: '13px', color: '#8a9e78' }}>✓ הפנייה נשלחה</span>}
               </div>
             </div>
-
             <div style={styles.card}>
               <h3 style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '16px' }}>הפניות שלי</h3>
               {requests.length === 0 ? (
@@ -258,6 +632,7 @@ export default function TeacherDashboard() {
           </>
         )}
 
+        {/* מערכת השעות שלי — הגריד האמיתי מהמערכת שפורסמה */}
         {activeTab === 'schedule' && (
           <div style={styles.card}>
             {scheduleLoading ? (
@@ -275,7 +650,7 @@ export default function TeacherDashboard() {
                   <thead>
                     <tr>
                       <th style={{ ...styles.gridHeadCell, width: '60px' }}>שעה</th>
-                      {DAY_ORDER.map(d => <th key={d} style={styles.gridHeadCell}>{DAY_NAMES[d]}</th>)}
+                      {DAY_ORDER.map(d => <th key={d} style={styles.gridHeadCell}>{DAY_NAMES_BY_NUM[d]}</th>)}
                     </tr>
                   </thead>
                   <tbody>
@@ -283,7 +658,7 @@ export default function TeacherDashboard() {
                       <tr key={hour}>
                         <td style={styles.gridHourCell}>שיעור {hour}</td>
                         {DAY_ORDER.map(day => {
-                          const lessons = cell(day, hour);
+                          const lessons = scheduleCell(day, hour);
                           return (
                             <td key={day} style={styles.gridCell}>
                               {lessons.map((e, idx) => (
@@ -305,6 +680,65 @@ export default function TeacherDashboard() {
           </div>
         )}
       </div>
+
+      {/* מודאל סיבה */}
+      {reasonModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setReasonModal(null)}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1px solid #e2dacc', padding: '32px', width: '400px' }} onClick={e => e.stopPropagation()} dir="rtl">
+            <h3 style={{ fontSize: '16px', color: '#4a3f35', marginBottom: '16px' }}>סיבת האילוץ (אופציונלי)</h3>
+            <textarea value={reasonModal.reason} onChange={e => setReasonModal(prev => ({ ...prev, reason: e.target.value }))}
+              style={{ ...styles.input, height: '80px', resize: 'vertical', marginBottom: '16px' }}
+              placeholder="למשל: טיפול רפואי, הסעת ילדים..." />
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setReasonModal(null)} style={styles.btnOutline}>דלג</button>
+              <button onClick={handleSaveReason} style={styles.btnSave}>שמור</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* תפריט בחירה ישירה — קליק ימני על תא */}
+      {quickPick && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1100 }} onClick={() => setQuickPick(null)} onContextMenu={e => { e.preventDefault(); setQuickPick(null); }}>
+          <div
+            onClick={e => e.stopPropagation()}
+            dir="rtl"
+            style={{
+              position: 'fixed',
+              top: Math.min(quickPick.y, window.innerHeight - 220),
+              left: Math.min(quickPick.x, window.innerWidth - 180),
+              backgroundColor: '#fff',
+              border: '1px solid #e2dacc',
+              borderRadius: '10px',
+              boxShadow: '0 6px 20px rgba(74,63,53,0.15)',
+              padding: '6px',
+              width: '170px',
+            }}
+          >
+            {['preferred', 'preferred_not', 'unavailable', 'free'].map(state => {
+              const isFree = state === 'free';
+              const colors = isFree ? { color: '#8a7a6e' } : CELL_COLORS[state];
+              return (
+                <button
+                  key={state}
+                  onClick={() => handleQuickPick(quickPick.dayIdx, quickPick.hour, state)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
+                    padding: '8px 10px', fontSize: '13px', color: '#4a3f35',
+                    background: 'none', border: 'none', borderRadius: '6px', cursor: 'pointer',
+                    textAlign: 'right', fontFamily: 'Varela Round, sans-serif',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FAF7F2'}
+                  onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <span style={{ width: '12px', height: '12px', borderRadius: '4px', backgroundColor: isFree ? '#f5f2ee' : colors.bg, border: `1px solid ${isFree ? '#e2dacc' : colors.border}`, flexShrink: 0 }}></span>
+                  {isFree ? 'נקה' : STATE_LABELS[state]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
