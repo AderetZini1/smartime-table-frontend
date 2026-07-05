@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule } from '../services/api';
 import AddTeacherModal from '../components/AddTeacherModal';
@@ -24,10 +23,23 @@ const REQUEST_TYPES = {
   general: 'פנייה כללית',
 };
 
+// Views for the schedule browser
+const VIEW_TYPES = [
+  { id: 'class', label: 'כיתה' },
+  { id: 'teacher', label: 'מורה' },
+  { id: 'subject', label: 'מקצוע' },
+  { id: 'grade', label: 'שכבה' },
+];
+
+// Day 1 = Sunday ... 6 = Friday. Friday only reaches hour 4.
+const DAY_NAMES_BY_NUM = { 1: 'ראשון', 2: 'שני', 3: 'שלישי', 4: 'רביעי', 5: 'חמישי', 6: 'שישי' };
+const DAY_ORDER = [1, 2, 3, 4, 5, 6];
+const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
+
 const statusLabel = (s) => ({ pending: 'ממתין', approved: 'אושר', rejected: 'נדחה' }[s] || s);
 const statusColor = (s) => ({ pending: '#c8baa6', approved: '#8a9e78', rejected: '#c0705a' }[s] || '#c8baa6');
 
-// מחלץ את שכבת הגיל משם הכיתה — "כיתה א1" → "א", "כיתה ו2" → "ו"
+// "כיתה א1" -> "א"
 const extractGrade = (groupName) => {
   const match = groupName.match(/כיתה\s*([א-ת])/);
   if (match) return match[1];
@@ -47,9 +59,6 @@ const styles = {
   pageTitle: { fontSize: '22px', color: '#4a3f35', margin: 0 },
   titleLine: { width: '28px', height: '1.5px', backgroundColor: '#8a9e78', marginTop: '8px' },
   card: { backgroundColor: '#fff', borderRadius: '14px', border: '1px solid #e2dacc', padding: '24px', marginBottom: '24px' },
-  statCard: { backgroundColor: '#fff', border: '1px solid #e2dacc', borderRadius: '14px', padding: '18px 22px', flex: 1 },
-  statLabel: { fontSize: '12px', color: '#c8baa6', marginBottom: '6px' },
-  statValue: { fontSize: '26px', color: '#4a3f35' },
   btnAdd: { backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'Varela Round, sans-serif' },
   btnOutline: { backgroundColor: 'transparent', color: '#8a7a6e', border: '1px solid #e2dacc', borderRadius: '8px', padding: '7px 14px', fontSize: '13px', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif' },
   tableHeader: { display: 'flex', fontSize: '12px', color: '#c8baa6', paddingBottom: '12px', borderBottom: '1px solid #e2dacc', gap: '12px' },
@@ -59,11 +68,18 @@ const styles = {
   iconBtn: { fontSize: '16px', color: '#c8baa6', cursor: 'pointer' },
   input: { width: '100%', padding: '10px 14px', border: '1px solid #e2dacc', borderRadius: '8px', fontSize: '14px', color: '#4a3f35', backgroundColor: '#FAF7F2', outline: 'none', boxSizing: 'border-box', fontFamily: 'Varela Round, sans-serif' },
   label: { display: 'block', fontSize: '12px', color: '#8a7a6e', marginBottom: '6px' },
+  viewBtn: (active) => ({ padding: '9px 20px', borderRadius: '10px', fontSize: '14px', cursor: 'pointer', backgroundColor: active ? '#8a9e78' : '#f5f2ee', color: active ? '#fff' : '#8a7a6e', border: `1px solid ${active ? '#8a9e78' : '#e2dacc'}`, fontFamily: 'Varela Round, sans-serif' }),
+  search: { padding: '9px 14px', border: '1px solid #e2dacc', borderRadius: '10px', fontSize: '14px', color: '#4a3f35', backgroundColor: '#FAF7F2', outline: 'none', fontFamily: 'Varela Round, sans-serif', minWidth: '220px' },
+  tile: (active) => ({ flexShrink: 0, backgroundColor: active ? '#EDF4E8' : '#FAF7F2', border: `1px solid ${active ? '#8a9e78' : '#e2dacc'}`, borderRadius: '12px', padding: '14px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'Varela Round, sans-serif', fontSize: '14px', color: '#4a3f35', whiteSpace: 'nowrap' }),
+  arrowBtn: { flexShrink: 0, width: '38px', height: '38px', borderRadius: '10px', border: '1px solid #e2dacc', backgroundColor: '#fff', color: '#8a7a6e', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' },
+  gridCell: { border: '1px solid #f0ebe3', padding: '6px', verticalAlign: 'top', height: '64px' },
+  gridHourCell: { border: '1px solid #f0ebe3', padding: '6px', textAlign: 'center', color: '#c8baa6', fontSize: '12px', backgroundColor: '#FAF7F2', whiteSpace: 'nowrap' },
+  gridHeadCell: { border: '1px solid #e2dacc', padding: '10px', textAlign: 'center', color: '#4a3f35', fontSize: '13px', backgroundColor: '#EDF4E8' },
+  lessonBox: { backgroundColor: '#F5F8F2', border: '1px solid #e3ecdb', borderRadius: '8px', padding: '5px 7px', marginBottom: '4px', fontSize: '11px', color: '#4a3f35', lineHeight: 1.35 },
 };
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('schedule');
   const [teachers, setTeachers] = useState([]);
   const [rooms, setRooms] = useState([]);
@@ -76,15 +92,18 @@ export default function AdminDashboard() {
   const [response, setResponse] = useState({ status: 'approved', admin_response: '' });
   const [newWindow, setNewWindow] = useState({ title: '', start_date: '', end_date: '' });
   const [pendingCount, setPendingCount] = useState(0);
-  const [openGrades, setOpenGrades] = useState({});
 
-  // ---- schedule generation state (port 8001) ----
+  // ---- schedule generation + browsing state (port 8001) ----
+  const [entries, setEntries] = useState([]);
   const [runInfo, setRunInfo] = useState(null);
-  const [scheduledGroupNames, setScheduledGroupNames] = useState(new Set());
   const [generating, setGenerating] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [genError, setGenError] = useState('');
   const [publishMsg, setPublishMsg] = useState('');
+  const [filterType, setFilterType] = useState('class'); // class | teacher | subject | grade
+  const [filterValue, setFilterValue] = useState('');
+  const [search, setSearch] = useState('');
+  const [tilesExpanded, setTilesExpanded] = useState(false);
 
   useEffect(() => {
     getTeachers().then(r => setTeachers(r.data));
@@ -100,19 +119,15 @@ export default function AdminDashboard() {
     getMyRequests().then(r => setPendingCount(r.data.filter(x => x.status === 'pending').length)).catch(() => {});
   }, []);
 
-  // Load the current (previewed) schedule from the 8001 backend, and note
-  // which classes already appear in it (for the readiness dots).
   const loadSchedule = async () => {
     setGenError('');
     try {
       const res = await getCurrentSchedule();
+      setEntries(res.data.entries || []);
       setRunInfo(res.data.run || null);
-      const names = new Set((res.data.entries || []).map(e => e.group_name));
-      setScheduledGroupNames(names);
     } catch (e) {
-      // not fatal — schedule area just shows "not generated yet"
+      setEntries([]);
       setRunInfo(null);
-      setScheduledGroupNames(new Set());
     }
   };
 
@@ -193,7 +208,41 @@ export default function AdminDashboard() {
   };
 
   const initials = (t) => `${t.first_name?.[0] || ''}${t.last_name?.[0] || ''}`;
-  const isReady = (group) => scheduledGroupNames.has(group.group_name);
+
+  // ----- schedule browsing helpers -----
+  const tileOptions = () => {
+    const set = new Set();
+    entries.forEach(e => {
+      if (filterType === 'class') set.add(e.group_name);
+      else if (filterType === 'teacher') set.add(`${e.teacher_first_name} ${e.teacher_last_name}`);
+      else if (filterType === 'subject') set.add(e.subject_name);
+      else if (filterType === 'grade') set.add(extractGrade(e.group_name));
+    });
+    return Array.from(set)
+      .filter(Boolean)
+      .filter(o => !search || o.includes(search))
+      .sort((a, b) => a.localeCompare(b, 'he'));
+  };
+
+  const matches = (e) => {
+    if (!filterValue) return false;
+    if (filterType === 'class') return e.group_name === filterValue;
+    if (filterType === 'teacher') return `${e.teacher_first_name} ${e.teacher_last_name}` === filterValue;
+    if (filterType === 'subject') return e.subject_name === filterValue;
+    if (filterType === 'grade') return extractGrade(e.group_name) === filterValue;
+    return false;
+  };
+
+  const shown = entries.filter(matches);
+  const cell = (day, hour) => shown.filter(e => e.day_of_week === day && e.hour_of_day === hour);
+  const options = activeTab === 'schedule' ? tileOptions() : [];
+
+  const selectView = (type) => {
+    setFilterType(type);
+    setFilterValue('');
+    setSearch('');
+    setTilesExpanded(false);
+  };
 
   return (
     <div style={styles.layout}>
@@ -441,7 +490,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* מערכת שעות — סרגל יצירה/פרסום + אקורדיון לפי שכבת גיל */}
+        {/* ===================== מערכת שעות ===================== */}
         {activeTab === 'schedule' && (
           <>
             {/* סרגל יצירה ופרסום */}
@@ -474,104 +523,106 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {groups.length === 0 ? (
+            {!runInfo ? (
               <div style={{ ...styles.card, minHeight: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div style={{ textAlign: 'center', color: '#c8baa6' }}>
                   <i className="ti ti-calendar" style={{ fontSize: '36px', display: 'block', marginBottom: '14px' }} aria-hidden="true"></i>
-                  <div style={{ fontSize: '15px' }}>אין עדיין כיתות במערכת</div>
+                  <div style={{ fontSize: '15px' }}>עדיין לא נוצרה מערכת שעות. לחצי על "צור מערכת שעות".</div>
                 </div>
               </div>
             ) : (
-              (() => {
-                const byGrade = {};
-                groups.forEach(g => {
-                  const grade = extractGrade(g.group_name);
-                  if (!byGrade[grade]) byGrade[grade] = [];
-                  byGrade[grade].push(g);
-                });
-                const gradeOrder = Object.keys(byGrade).sort((a, b) => a.localeCompare(b, 'he'));
+              <>
+                {/* בורר תצוגה + חיפוש */}
+                <div style={{ ...styles.card, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    {VIEW_TYPES.map(v => (
+                      <button key={v.id} onClick={() => selectView(v.id)} style={styles.viewBtn(filterType === v.id)}>
+                        {v.label}
+                      </button>
+                    ))}
+                    <input
+                      style={{ ...styles.search, marginRight: 'auto' }}
+                      placeholder="חיפוש…"
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                    />
+                  </div>
 
-                return (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {gradeOrder.map(grade => {
-                      const classesInGrade = byGrade[grade];
-                      const readyCount = classesInGrade.filter(g => isReady(g)).length;
-                      const isOpen = !!openGrades[grade];
+                  {/* שורת אריחים */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                    <div style={{
+                      display: 'flex', gap: '10px', flex: 1,
+                      overflowX: tilesExpanded ? 'visible' : 'auto',
+                      flexWrap: tilesExpanded ? 'wrap' : 'nowrap',
+                      paddingBottom: '6px',
+                    }}>
+                      {options.length === 0 ? (
+                        <div style={{ color: '#c8baa6', fontSize: '13px', padding: '8px' }}>לא נמצאו תוצאות</div>
+                      ) : options.map(o => (
+                        <button key={o} onClick={() => setFilterValue(o)} style={styles.tile(filterValue === o)}>
+                          <i className="ti ti-calendar-event" style={{ fontSize: '15px', color: filterValue === o ? '#6b8f5e' : '#c8baa6' }} aria-hidden="true"></i>
+                          {filterType === 'grade' ? `שכבת ${o}׳` : o}
+                        </button>
+                      ))}
+                    </div>
+                    {options.length > 0 && (
+                      <button
+                        style={styles.arrowBtn}
+                        title={tilesExpanded ? 'צמצם' : 'הצג הכל'}
+                        onClick={() => setTilesExpanded(v => !v)}
+                      >
+                        <i className={`ti ${tilesExpanded ? 'ti-chevron-up' : 'ti-chevron-left'}`} aria-hidden="true"></i>
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-                      return (
-                        <div key={grade} style={{ backgroundColor: '#fff', borderRadius: '14px', border: '1px solid #e2dacc', overflow: 'hidden' }}>
-                          <button
-                            onClick={() => setOpenGrades(prev => ({ ...prev, [grade]: !prev[grade] }))}
-                            style={{
-                              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                              padding: '18px 24px', background: 'none', border: 'none', cursor: 'pointer',
-                              fontFamily: 'Varela Round, sans-serif',
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                              <i className={`ti ${isOpen ? 'ti-chevron-down' : 'ti-chevron-left'}`} style={{ fontSize: '16px', color: '#c8baa6' }} aria-hidden="true"></i>
-                              <span style={{ fontSize: '15px', color: '#4a3f35' }}>שכבת {grade}׳</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                              <span style={{ fontSize: '12px', color: '#8a7a6e' }}>
-                                {readyCount} מתוך {classesInGrade.length} מוכנות
-                              </span>
-                              <span style={{
-                                fontSize: '12px', padding: '3px 10px', borderRadius: '20px',
-                                backgroundColor: readyCount === classesInGrade.length ? '#EDF4E8' : '#f0ebe3',
-                                color: readyCount === classesInGrade.length ? '#6b8f5e' : '#c8baa6',
-                              }}>
-                                {classesInGrade.length} כיתות
-                              </span>
-                            </div>
-                          </button>
-
-                          {isOpen && (
-                            <div style={{ padding: '4px 24px 22px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 150px))', gap: '14px' }}>
-                              {classesInGrade.map(group => {
-                                const ready = isReady(group);
+                {/* גריד */}
+                <div style={styles.card}>
+                  {!filterValue ? (
+                    <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px' }}>
+                      בחר/י פריט מהשורה למעלה כדי להציג מערכת שעות.
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                        <thead>
+                          <tr>
+                            <th style={{ ...styles.gridHeadCell, width: '60px' }}>שעה</th>
+                            {DAY_ORDER.map(d => <th key={d} style={styles.gridHeadCell}>{DAY_NAMES_BY_NUM[d]}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {HOURS.map(hour => (
+                            <tr key={hour}>
+                              <td style={styles.gridHourCell}>שיעור {hour}</td>
+                              {DAY_ORDER.map(day => {
+                                const lessons = cell(day, hour);
                                 return (
-                                  <button
-                                    key={group.id}
-                                    onClick={() => navigate(`/admin/class/${group.id}`)}
-                                    style={{
-                                      backgroundColor: '#FAF7F2',
-                                      border: '1px solid #e2dacc',
-                                      borderRadius: '12px',
-                                      padding: '20px 14px',
-                                      cursor: 'pointer',
-                                      display: 'flex',
-                                      flexDirection: 'column',
-                                      alignItems: 'center',
-                                      gap: '10px',
-                                      fontFamily: 'Varela Round, sans-serif',
-                                      position: 'relative',
-                                      transition: 'border-color 0.15s',
-                                    }}
-                                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#8a9e78'; }}
-                                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2dacc'; }}
-                                  >
-                                    <div style={{
-                                      position: 'absolute', top: '10px', left: '10px',
-                                      width: '8px', height: '8px', borderRadius: '50%',
-                                      backgroundColor: ready ? '#8a9e78' : '#e2dacc',
-                                    }} title={ready ? 'מערכת שעות קיימת' : 'טרם נוצרה מערכת שעות'}></div>
-
-                                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: ready ? '#EDF4E8' : '#f0ebe3', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                      <i className="ti ti-calendar-event" style={{ fontSize: '18px', color: ready ? '#6b8f5e' : '#c8baa6' }} aria-hidden="true"></i>
-                                    </div>
-                                    <span style={{ fontSize: '14px', color: '#4a3f35' }}>{group.group_name}</span>
-                                  </button>
+                                  <td key={day} style={styles.gridCell}>
+                                    {lessons.map((e, idx) => (
+                                      <div key={idx} style={styles.lessonBox}>
+                                        <div style={{ fontWeight: 600 }}>{e.subject_name}</div>
+                                        {filterType !== 'teacher' && (
+                                          <div style={{ color: '#8a7a6e' }}>{e.teacher_first_name} {e.teacher_last_name}</div>
+                                        )}
+                                        {filterType !== 'class' && (
+                                          <div style={{ color: '#8a7a6e' }}>{e.group_name}</div>
+                                        )}
+                                        {e.room_name && <div style={{ color: '#a99', fontSize: '10px' }}>{e.room_name}</div>}
+                                      </div>
+                                    ))}
+                                  </td>
                                 );
                               })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </>
         )}
