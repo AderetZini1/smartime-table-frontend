@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
+import ClassSchedule from './pages/ClassSchedule';
 
 function PrivateRoute({ children, adminOnly }) {
   const { user } = useAuth();
@@ -22,6 +23,11 @@ function App() {
               <AdminDashboard />
             </PrivateRoute>
           } />
+          <Route path="/admin/class/:groupId" element={
+            <PrivateRoute adminOnly>
+              <ClassSchedule />
+            </PrivateRoute>
+          } />
           <Route path="/teacher" element={
             <PrivateRoute>
               <TeacherDashboard />
@@ -33,5 +39,4 @@ function App() {
     </AuthProvider>
   );
 }
-
 export default App;
