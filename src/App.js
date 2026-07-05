@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
+import ForgotPassword from './pages/ForgotPassword';
 
 function PrivateRoute({ children, adminOnly }) {
   const { user } = useAuth();
@@ -27,6 +28,7 @@ function App() {
               <TeacherDashboard />
             </PrivateRoute>
           } />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="*" element={<Navigate to="/login" />} />
         </Routes>
       </BrowserRouter>
