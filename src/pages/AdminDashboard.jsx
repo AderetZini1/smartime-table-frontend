@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule } from '../services/api';
+import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations } from '../services/api';
 import AddTeacherModal from '../components/AddTeacherModal';
 import AddRoomModal from '../components/AddRoomModal';
 import AddSubjectModal from '../components/AddSubjectModal';
@@ -100,6 +100,8 @@ export default function AdminDashboard() {
   const [publishing, setPublishing] = useState(false);
   const [genError, setGenError] = useState('');
   const [publishMsg, setPublishMsg] = useState('');
+  const [violations, setViolations] = useState(null);
+  const [showViolations, setShowViolations] = useState(false);
   const [filterType, setFilterType] = useState('class'); // class | teacher | subject | grade
   const [selectedValues, setSelectedValues] = useState([]); // multi-select
   const [search, setSearch] = useState('');
@@ -176,6 +178,16 @@ export default function AdminDashboard() {
       setPublishMsg('שגיאה בפרסום');
     } finally {
       setPublishing(false);
+    }
+  };
+
+  const openViolations = async () => {
+    setShowViolations(true);
+    try {
+      const res = await getViolations();
+      setViolations(res.data.violations || []);
+    } catch (e) {
+      setViolations([]);
     }
   };
 
@@ -525,6 +537,14 @@ export default function AdminDashboard() {
                 {runInfo && !generating && (
                   <div>המערכת נוצרה ע״י <strong>{runInfo.algorithm}</strong> · ציון {runInfo.score}{runInfo.is_published ? ' · פורסם' : ' · טרם פורסם'}</div>
                 )}
+                {runInfo && (
+                  <button
+                    onClick={openViolations}
+                    style={{ ...styles.btnOutline, marginTop: '8px' }}
+                  >
+                    <i className="ti ti-alert-triangle" aria-hidden="true"></i> הפרות שנמצאו
+                  </button>
+                )}
               </div>
             </div>
 
@@ -691,6 +711,40 @@ export default function AdminDashboard() {
               <button onClick={() => setRespondModal(null)} style={styles.btnOutline}>ביטול</button>
               <button onClick={handleRespond} style={styles.btnAdd}>שלח תשובה</button>
             </div>
+          </div>
+        </div>
+      )}
+      {showViolations && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowViolations(false)}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1px solid #e2dacc', padding: '28px', width: '640px', maxWidth: '92vw', maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()} dir="rtl">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ fontSize: '18px', color: '#4a3f35', margin: 0 }}>הפרות שנמצאו במערכת</h2>
+              <button onClick={() => setShowViolations(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c8baa6', fontSize: '20px' }}>✕</button>
+            </div>
+
+            {violations === null ? (
+              <div style={{ textAlign: 'center', color: '#c8baa6', padding: '30px' }}>טוען…</div>
+            ) : violations.length === 0 ? (
+              <div style={{ textAlign: 'center', color: '#6b8f5e', padding: '30px' }}>
+                <i className="ti ti-circle-check" style={{ fontSize: '32px', display: 'block', marginBottom: '10px' }} aria-hidden="true"></i>
+                לא נמצאו הפרות — מערכת מושלמת!
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: '13px', color: '#8a7a6e', marginBottom: '14px' }}>
+                  סה״כ {violations.length} הפרות · קשיחות: {violations.filter(v => v.severity === 'hard').length} · רכות: {violations.filter(v => v.severity === 'soft').length}
+                </div>
+                {violations.map((v, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: i < violations.length - 1 ? '1px solid #f0ebe3' : 'none' }}>
+                    <span style={{ flexShrink: 0, fontSize: '11px', padding: '3px 10px', borderRadius: '20px', backgroundColor: v.severity === 'hard' ? '#FAE8E8' : '#FFF3A3', color: v.severity === 'hard' ? '#c0705a' : '#a08c30' }}>
+                      {v.severity === 'hard' ? 'קשיחה' : 'רכה'}
+                    </span>
+                    <span style={{ flex: 1, fontSize: '13px', color: '#4a3f35' }}>{v.detail}</span>
+                    <span style={{ flexShrink: 0, fontSize: '13px', color: '#8a7a6e', fontWeight: 600 }}>+{v.penalty.toLocaleString()}</span>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         </div>
       )}
