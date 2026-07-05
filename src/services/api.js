@@ -68,4 +68,18 @@ export const getMyRequests = () => api.get('/teacher-requests/');
 export const createRequest = (data) => api.post('/teacher-requests/', data);
 export const respondToRequest = (id, data) => api.patch(`/teacher-requests/${id}/respond`, data);
 
+// Teacher Subjects
+export const getMySubjects = () => api.get('/teacher-subjects/me');
+export const addMySubject = (subjectId) => api.post(`/teacher-subjects/me/${subjectId}`);
+export const removeMySubject = (subjectId) => api.delete(`/teacher-subjects/me/${subjectId}`);
+
+// Teacher Grade Levels
+export const getMyGradeLevels = () => api.get('/teacher-grade-levels/me');
+export const addMyGradeLevel = (grade) => api.post(`/teacher-grade-levels/me/${grade}`);
+export const removeMyGradeLevel = (grade) => api.delete(`/teacher-grade-levels/me/${grade}`);
+
+// Teacher Homeroom Preferences
+export const getMyHomeroomPref = () => api.get('/teacher-homeroom-prefs/me');
+export const saveMyHomeroomPref = (data) => api.post('/teacher-homeroom-prefs/me', data);
+
 export default api;
