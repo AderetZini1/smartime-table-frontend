@@ -101,7 +101,7 @@ export default function AdminDashboard() {
   const [genError, setGenError] = useState('');
   const [publishMsg, setPublishMsg] = useState('');
   const [filterType, setFilterType] = useState('class'); // class | teacher | subject | grade
-  const [filterValue, setFilterValue] = useState('');
+  const [selectedValues, setSelectedValues] = useState([]); // multi-select
   const [search, setSearch] = useState('');
   const [tilesExpanded, setTilesExpanded] = useState(false);
 
@@ -224,25 +224,30 @@ export default function AdminDashboard() {
       .sort((a, b) => a.localeCompare(b, 'he'));
   };
 
-  const matches = (e) => {
-    if (!filterValue) return false;
-    if (filterType === 'class') return e.group_name === filterValue;
-    if (filterType === 'teacher') return `${e.teacher_first_name} ${e.teacher_last_name}` === filterValue;
-    if (filterType === 'subject') return e.subject_name === filterValue;
-    if (filterType === 'grade') return extractGrade(e.group_name) === filterValue;
-    return false;
-  };
-
-  const shown = entries.filter(matches);
-  const cell = (day, hour) => shown.filter(e => e.day_of_week === day && e.hour_of_day === hour);
   const options = activeTab === 'schedule' ? tileOptions() : [];
 
   const selectView = (type) => {
     setFilterType(type);
-    setFilterValue('');
+    setSelectedValues([]);
     setSearch('');
     setTilesExpanded(false);
   };
+
+  // toggle a tile: add if new, remove if already selected
+  const toggleValue = (val) => {
+    setSelectedValues(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
+  };
+
+  // entries that match a specific selected value, for its own grid
+  const entriesFor = (val) => entries.filter(e => {
+    if (filterType === 'class') return e.group_name === val;
+    if (filterType === 'teacher') return `${e.teacher_first_name} ${e.teacher_last_name}` === val;
+    if (filterType === 'subject') return e.subject_name === val;
+    if (filterType === 'grade') return extractGrade(e.group_name) === val;
+    return false;
+  });
+
+  const tileLabel = (val) => (filterType === 'grade' ? `שכבת ${val}׳` : val);
 
   return (
     <div style={styles.layout}>
@@ -551,19 +556,22 @@ export default function AdminDashboard() {
                   {/* שורת אריחים */}
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
                     <div style={{
-                      display: 'flex', gap: '10px', flex: 1,
-                      overflowX: tilesExpanded ? 'visible' : 'auto',
+                      display: 'flex', gap: '10px', flex: 1, minWidth: 0,
+                      overflowX: tilesExpanded ? 'hidden' : 'auto',
                       flexWrap: tilesExpanded ? 'wrap' : 'nowrap',
                       paddingBottom: '6px',
                     }}>
                       {options.length === 0 ? (
                         <div style={{ color: '#c8baa6', fontSize: '13px', padding: '8px' }}>לא נמצאו תוצאות</div>
-                      ) : options.map(o => (
-                        <button key={o} onClick={() => setFilterValue(o)} style={styles.tile(filterValue === o)}>
-                          <i className="ti ti-calendar-event" style={{ fontSize: '15px', color: filterValue === o ? '#6b8f5e' : '#c8baa6' }} aria-hidden="true"></i>
-                          {filterType === 'grade' ? `שכבת ${o}׳` : o}
-                        </button>
-                      ))}
+                      ) : options.map(o => {
+                        const active = selectedValues.includes(o);
+                        return (
+                          <button key={o} onClick={() => toggleValue(o)} style={styles.tile(active)}>
+                            <i className="ti ti-calendar-event" style={{ fontSize: '15px', color: active ? '#6b8f5e' : '#c8baa6' }} aria-hidden="true"></i>
+                            {tileLabel(o)}
+                          </button>
+                        );
+                      })}
                     </div>
                     {options.length > 0 && (
                       <button
@@ -577,51 +585,63 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {/* גריד */}
-                <div style={styles.card}>
-                  {!filterValue ? (
-                    <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px' }}>
-                      בחר/י פריט מהשורה למעלה כדי להציג מערכת שעות.
-                    </div>
-                  ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-                        <thead>
-                          <tr>
-                            <th style={{ ...styles.gridHeadCell, width: '60px' }}>שעה</th>
-                            {DAY_ORDER.map(d => <th key={d} style={styles.gridHeadCell}>{DAY_NAMES_BY_NUM[d]}</th>)}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {HOURS.map(hour => (
-                            <tr key={hour}>
-                              <td style={styles.gridHourCell}>שיעור {hour}</td>
-                              {DAY_ORDER.map(day => {
-                                const lessons = cell(day, hour);
-                                return (
-                                  <td key={day} style={styles.gridCell}>
-                                    {lessons.map((e, idx) => (
-                                      <div key={idx} style={styles.lessonBox}>
-                                        <div style={{ fontWeight: 600 }}>{e.subject_name}</div>
-                                        {filterType !== 'teacher' && (
-                                          <div style={{ color: '#8a7a6e' }}>{e.teacher_first_name} {e.teacher_last_name}</div>
-                                        )}
-                                        {filterType !== 'class' && (
-                                          <div style={{ color: '#8a7a6e' }}>{e.group_name}</div>
-                                        )}
-                                        {e.room_name && <div style={{ color: '#a99', fontSize: '10px' }}>{e.room_name}</div>}
-                                      </div>
-                                    ))}
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
+                {/* גרידים — אחד לכל פריט שנבחר, בערימה מלמעלה למטה */}
+                {selectedValues.length === 0 ? (
+                  <div style={{ ...styles.card, textAlign: 'center', color: '#c8baa6', padding: '40px' }}>
+                    בחר/י פריט אחד או יותר מהשורה למעלה כדי להציג מערכת שעות. אפשר לבחור כמה יחד.
+                  </div>
+                ) : (
+                  selectedValues.map(val => {
+                    const valEntries = entriesFor(val);
+                    const cellFor = (day, hour) => valEntries.filter(e => e.day_of_week === day && e.hour_of_day === hour);
+                    return (
+                      <div key={val} style={styles.card}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                          <h3 style={{ fontSize: '16px', color: '#4a3f35', margin: 0 }}>{tileLabel(val)}</h3>
+                          <button onClick={() => toggleValue(val)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c8baa6', fontSize: '13px', fontFamily: 'Varela Round, sans-serif' }} title="הסתר">
+                            <i className="ti ti-x" aria-hidden="true"></i> הסתר
+                          </button>
+                        </div>
+                        <div style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                            <thead>
+                              <tr>
+                                <th style={{ ...styles.gridHeadCell, width: '60px' }}>שעה</th>
+                                {DAY_ORDER.map(d => <th key={d} style={styles.gridHeadCell}>{DAY_NAMES_BY_NUM[d]}</th>)}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {HOURS.map(hour => (
+                                <tr key={hour}>
+                                  <td style={styles.gridHourCell}>שיעור {hour}</td>
+                                  {DAY_ORDER.map(day => {
+                                    const lessons = cellFor(day, hour);
+                                    return (
+                                      <td key={day} style={styles.gridCell}>
+                                        {lessons.map((e, idx) => (
+                                          <div key={idx} style={styles.lessonBox}>
+                                            <div style={{ fontWeight: 600 }}>{e.subject_name}</div>
+                                            {filterType !== 'teacher' && (
+                                              <div style={{ color: '#8a7a6e' }}>{e.teacher_first_name} {e.teacher_last_name}</div>
+                                            )}
+                                            {filterType !== 'class' && (
+                                              <div style={{ color: '#8a7a6e' }}>{e.group_name}</div>
+                                            )}
+                                            {e.room_name && <div style={{ color: '#a99', fontSize: '10px' }}>{e.room_name}</div>}
+                                          </div>
+                                        ))}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </>
             )}
           </>
