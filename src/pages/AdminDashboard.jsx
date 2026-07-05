@@ -55,7 +55,7 @@ const styles = {
   brandName: { fontSize: '17px', color: '#4a3f35' },
   navItem: (active) => ({ padding: '13px 24px', fontSize: '15px', color: active ? '#4a3f35' : '#8a7a6e', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', borderRight: active ? '3px solid #8a9e78' : '3px solid transparent', backgroundColor: active ? '#FAF7F2' : 'transparent', border: 'none', width: '100%', textAlign: 'right', fontFamily: 'Varela Round, sans-serif' }),
   divider: { margin: '12px 24px', borderBottom: '1px solid #e2dacc' },
-  main: { flex: 1, padding: '40px 48px' },
+  main: { flex: 1, minWidth: 0, maxWidth: '100%', padding: '40px 48px', overflowX: 'hidden' },
   pageTitle: { fontSize: '22px', color: '#4a3f35', margin: 0 },
   titleLine: { width: '28px', height: '1.5px', backgroundColor: '#8a9e78', marginTop: '8px' },
   card: { backgroundColor: '#fff', borderRadius: '14px', border: '1px solid #e2dacc', padding: '24px', marginBottom: '24px' },
@@ -554,24 +554,26 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* שורת אריחים */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                    <div style={{
-                      display: 'flex', gap: '10px', flex: 1, minWidth: 0,
-                      overflowX: tilesExpanded ? 'hidden' : 'auto',
-                      flexWrap: tilesExpanded ? 'wrap' : 'nowrap',
-                      paddingBottom: '6px',
-                    }}>
-                      {options.length === 0 ? (
-                        <div style={{ color: '#c8baa6', fontSize: '13px', padding: '8px' }}>לא נמצאו תוצאות</div>
-                      ) : options.map(o => {
-                        const active = selectedValues.includes(o);
-                        return (
-                          <button key={o} onClick={() => toggleValue(o)} style={styles.tile(active)}>
-                            <i className="ti ti-calendar-event" style={{ fontSize: '15px', color: active ? '#6b8f5e' : '#c8baa6' }} aria-hidden="true"></i>
-                            {tileLabel(o)}
-                          </button>
-                        );
-                      })}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', width: '100%', minWidth: 0 }}>
+                    <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                      <div style={{
+                        display: 'flex', gap: '10px',
+                        overflowX: tilesExpanded ? 'visible' : 'auto',
+                        flexWrap: tilesExpanded ? 'wrap' : 'nowrap',
+                        paddingBottom: '8px',
+                      }}>
+                        {options.length === 0 ? (
+                          <div style={{ color: '#c8baa6', fontSize: '13px', padding: '8px' }}>לא נמצאו תוצאות</div>
+                        ) : options.map(o => {
+                          const active = selectedValues.includes(o);
+                          return (
+                            <button key={o} onClick={() => toggleValue(o)} style={styles.tile(active)}>
+                              <i className="ti ti-calendar-event" style={{ fontSize: '15px', color: active ? '#6b8f5e' : '#c8baa6' }} aria-hidden="true"></i>
+                              {tileLabel(o)}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                     {options.length > 0 && (
                       <button
