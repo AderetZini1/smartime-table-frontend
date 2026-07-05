@@ -156,7 +156,8 @@ export default function TeacherDashboard() {
         const states = {};
         r.data.forEach(c => {
           const key = `${Math.floor((c.timeslot_id - 1) / 8)}-${((c.timeslot_id - 1) % 8) + 1}`;
-          states[key] = { state: c.constraint_type || 'unavailable', id: c.id, reason: c.reason || '' };
+          const stateByApiType = { hard: 'unavailable', soft: 'preferred_not' };
+          states[key] = { state: stateByApiType[c.constraint_type] || 'preferred_not', id: c.id, reason: c.reason || '' };
         });
         setCellStates(states);
       });
@@ -203,11 +204,11 @@ export default function TeacherDashboard() {
 
     // empty -> prefers-not (soft) -> cannot (hard) -> empty
     if (!current) {
-      const res = await createConstraint({ teacher_id: user.id, timeslot_id, weight: 1, constraint_type: 'preferred_not' });
+      const res = await createConstraint({ teacher_id: user.id, timeslot_id, weight: 1, constraint_type: 'soft' });
       setCellStates(prev => ({ ...prev, [key]: { state: 'preferred_not', id: res.data.id, reason: '' } }));
     } else if (current.state === 'preferred_not') {
       await deleteConstraint(current.id);
-      const res = await createConstraint({ teacher_id: user.id, timeslot_id, weight: 10000, constraint_type: 'unavailable' });
+      const res = await createConstraint({ teacher_id: user.id, timeslot_id, weight: 1, constraint_type: 'hard' });
       setReasonModal({ dayIdx, hour, constraintId: res.data.id, reason: '' });
       setCellStates(prev => ({ ...prev, [key]: { state: 'unavailable', id: res.data.id, reason: '' } }));
     } else {
@@ -229,8 +230,8 @@ export default function TeacherDashboard() {
       return;
     }
 
-    const weightByState = { preferred_not: 1, unavailable: 10000 };
-    const res = await createConstraint({ teacher_id: user.id, timeslot_id, weight: weightByState[targetState], constraint_type: targetState });
+    const apiTypeByState = { preferred_not: 'soft', unavailable: 'hard' };
+    const res = await createConstraint({ teacher_id: user.id, timeslot_id, weight: 1, constraint_type: apiTypeByState[targetState] });
     setCellStates(prev => ({ ...prev, [key]: { state: targetState, id: res.data.id, reason: '' } }));
     setQuickPick(null);
     if (targetState === 'unavailable') {
