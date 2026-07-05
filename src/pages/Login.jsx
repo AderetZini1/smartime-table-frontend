@@ -109,6 +109,15 @@ export default function Login() {
           </button>
 
         </form>
+        <div style={{ textAlign: 'center', marginTop: '20px' }}>
+          <button
+            type="button"
+            onClick={() => navigate('/forgot-password')}
+            style={{ background: 'none', border: 'none', color: '#8a7a6e', fontSize: '13px', cursor: 'pointer' }}
+          >
+            שכחת סיסמה?
+          </button>
+        </div>
       </div>
     </div>
   );
