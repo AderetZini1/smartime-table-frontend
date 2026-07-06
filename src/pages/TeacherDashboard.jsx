@@ -556,6 +556,27 @@ export default function TeacherDashboard() {
                 </div>
 
                 <div style={styles.card}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <div style={{ fontSize: '15px', color: '#4a3f35' }}>הזן אילוצים בשפה חופשית</div>
+                    <span style={{ fontSize: '11px', color: '#a08c30', backgroundColor: '#FFF3A3', border: '1px solid #e8d88a', borderRadius: '20px', padding: '2px 10px' }}>בקרוב</span>
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#8a7a6e', marginBottom: '16px' }}>
+                    בעתיד ניתן יהיה לתאר אילוצים במילים חופשיות (למשל: "יש לי חופש ביום חמישי" או "לא יכול לפני שעה 2 ביום ראשון"), והמערכת תזהה אותם אוטומטית. הכלי עדיין בפיתוח.
+                  </div>
+                  <textarea
+                    disabled
+                    placeholder="תיאור האילוצים יתאפשר בקרוב..."
+                    style={{ ...styles.input, height: '80px', resize: 'none', marginBottom: '12px', opacity: 0.6, cursor: 'not-allowed' }}
+                  />
+                  <button
+                    disabled
+                    style={{ ...styles.btnSave, opacity: 0.5, cursor: 'not-allowed' }}
+                  >
+                    נתח עם AI (בקרוב)
+                  </button>
+                </div>
+
+                <div style={styles.card}>
                   <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '16px' }}>שעות שבועיות</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '8px' }}>
                     <div>
