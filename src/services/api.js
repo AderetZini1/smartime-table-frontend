@@ -69,6 +69,9 @@ export const removeMyGradeLevel = (grade) => api.delete(`/teacher-grade-levels/m
 export const getMyHomeroomPref = () => api.get('/teacher-homeroom-prefs/me');
 export const saveMyHomeroomPref = (data) => api.post('/teacher-homeroom-prefs/me', data);
 
+export const getMyPreferences = () => api.get('/teacher-preferences/me');
+export const saveMyPreferences = (data) => api.post('/teacher-preferences/me', data);
+
 export const getViolations = () => api2.get('/schedule/violations');
 
 // ========================================================================
