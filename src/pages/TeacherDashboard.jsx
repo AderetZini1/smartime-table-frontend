@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule } from '../services/api';
+import { getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule, getMyPreferences, saveMyPreferences } from '../services/api';
 
 const DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'];
 const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -54,6 +54,22 @@ const TABS = [
 
 const statusLabel = (s) => ({ pending: 'ממתין', approved: 'אושר', rejected: 'נדחה' }[s] || s);
 const statusColor = (s) => ({ pending: '#c8baa6', approved: '#8a9e78', rejected: '#c0705a' }[s] || '#c8baa6');
+
+// Small on/off toggle switch (RTL: knob sits right when ON)
+function Toggle({ on, onClick }) {
+  return (
+    <button onClick={onClick} type="button" style={{
+      width: '46px', height: '26px', borderRadius: '13px', border: 'none', cursor: 'pointer',
+      backgroundColor: on ? '#8a9e78' : '#e2dacc', position: 'relative', transition: 'background-color 0.15s', flexShrink: 0, padding: 0,
+    }}>
+      <span style={{
+        position: 'absolute', top: '3px', right: on ? '3px' : '23px',
+        width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#fff',
+        transition: 'right 0.15s', boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+      }} />
+    </button>
+  );
+}
 
 // ── קומפוננטה: רשת מקצועות עם checkboxes ──────────────────────────────────
 function SubjectCheckboxGrid({ subjects, mySubjects, onToggle }) {
@@ -123,13 +139,11 @@ export default function TeacherDashboard() {
   const [cellStates, setCellStates] = useState({});
   const [reasonModal, setReasonModal] = useState(null);
   const [quickPick, setQuickPick] = useState(null);
-  const [freeText, setFreeText] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiPreview, setAiPreview] = useState(null);
+  const [prefsSaved, setPrefsSaved] = useState(false);
   const [preferences, setPreferences] = useState({
-    min_hours: 18, weekly_hours_quota: 24, max_hours: 26,
+    min_hours: 18, max_hours: 26,
     preferred_consecutive: false,
-    priority_early_finish: 3, priority_no_gaps: 3, priority_free_day: 3, priority_consecutive: 3,
+    priority_early_finish: 0, priority_no_gaps: 0, priority_free_day: 0, priority_consecutive: 0,
   });
 
   // ---- my published schedule (port 8001) ----
@@ -168,6 +182,20 @@ export default function TeacherDashboard() {
             wants_homeroom: r.data.wants_homeroom ?? null,
             preferred_group_id: r.data.preferred_group_id ?? null,
           });
+        }
+      }).catch(() => {});
+      getMyPreferences().then(r => {
+        if (r.data) {
+          setPreferences(prev => ({
+            ...prev,
+            min_hours: r.data.min_hours ?? prev.min_hours,
+            max_hours: r.data.max_hours ?? prev.max_hours,
+            preferred_consecutive: !!r.data.preferred_consecutive,
+            priority_early_finish: r.data.priority_early_finish ? 1 : 0,
+            priority_no_gaps: r.data.priority_no_gaps ? 1 : 0,
+            priority_free_day: r.data.priority_free_day ? 1 : 0,
+            priority_consecutive: r.data.priority_consecutive ? 1 : 0,
+          }));
         }
       }).catch(() => {});
     }
@@ -255,8 +283,9 @@ export default function TeacherDashboard() {
     setTimeout(() => setRequestSent(false), 3000);
   };
 
-  const handleSaveHomeroomPref = async () => {
-    await saveMyHomeroomPref(homeroomPref);
+  // Homeroom now auto-saves on every change (no button).
+  const saveHomeroom = async (next) => {
+    try { await saveMyHomeroomPref(next); } catch (e) { /* silent */ }
   };
 
   const handleToggleSubject = async (subject) => {
@@ -270,20 +299,41 @@ export default function TeacherDashboard() {
     }
   };
 
+  // Preferences auto-save (sends the whole preferences object every time).
+  const savePreferences = async (p) => {
+    try {
+      await saveMyPreferences({
+        min_hours: p.min_hours,
+        max_hours: p.max_hours,
+        preferred_consecutive: p.preferred_consecutive,
+        priority_early_finish: p.priority_early_finish,
+        priority_no_gaps: p.priority_no_gaps,
+        priority_free_day: p.priority_free_day,
+        priority_consecutive: p.priority_consecutive,
+      });
+      setPrefsSaved(true);
+      setTimeout(() => setPrefsSaved(false), 1500);
+    } catch (e) { /* silent */ }
+  };
+
+  const togglePriority = (field) => {
+    const next = { ...preferences, [field]: preferences[field] ? 0 : 1 };
+    setPreferences(next);
+    savePreferences(next);
+  };
+
+  const setConsecutive = (val) => {
+    const next = { ...preferences, preferred_consecutive: val };
+    setPreferences(next);
+    savePreferences(next);
+  };
+
   const scheduleCell = (day, hour) => myEntries.filter(e => e.day_of_week === day && e.hour_of_day === hour);
 
-  const PrioritySlider = ({ label, field }) => (
-    <div style={{ marginBottom: '16px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-        <label style={styles.label}>{label}</label>
-        <span style={{ fontSize: '13px', color: '#8a9e78', fontWeight: 'bold' }}>{preferences[field]}/5</span>
-      </div>
-      <input type="range" min="1" max="5" value={preferences[field]}
-        onChange={e => setPreferences(prev => ({ ...prev, [field]: parseInt(e.target.value) }))}
-        style={{ width: '100%', accentColor: '#8a9e78' }} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#c8baa6' }}>
-        <span>לא חשוב</span><span>חשוב מאוד</span>
-      </div>
+  const PriorityToggle = ({ label, field }) => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0', borderBottom: '1px solid #f0ebe3' }}>
+      <span style={{ fontSize: '14px', color: '#4a3f35' }}>{label}</span>
+      <Toggle on={!!preferences[field]} onClick={() => togglePriority(field)} />
     </div>
   );
 
@@ -362,6 +412,10 @@ export default function TeacherDashboard() {
               </div>
             ) : (
               <>
+                <div style={{ fontSize: '12px', color: '#8a9e78', marginBottom: '14px', height: '16px' }}>
+                  {prefsSaved ? '✓ ההעדפות נשמרו' : 'כל שינוי נשמר אוטומטית'}
+                </div>
+
                 <div style={styles.card}>
                   <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '20px' }}>נתוני הוראה</div>
 
@@ -405,13 +459,13 @@ export default function TeacherDashboard() {
                     </div>
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                       <button
-                        onClick={() => setHomeroomPref(p => ({ ...p, wants_homeroom: true }))}
+                        onClick={() => { const next = { ...homeroomPref, wants_homeroom: true }; setHomeroomPref(next); saveHomeroom(next); }}
                         style={styles.chipBtn(homeroomPref.wants_homeroom === true)}
                       >
                         כן, אני רוצה לחנך
                       </button>
                       <button
-                        onClick={() => setHomeroomPref(p => ({ ...p, wants_homeroom: false, preferred_group_id: null }))}
+                        onClick={() => { const next = { wants_homeroom: false, preferred_group_id: null }; setHomeroomPref(next); saveHomeroom(next); }}
                         style={styles.chipBtn(homeroomPref.wants_homeroom === false)}
                       >
                         לא
@@ -419,14 +473,14 @@ export default function TeacherDashboard() {
                     </div>
 
                     {homeroomPref.wants_homeroom === true && (
-                      <div style={{ backgroundColor: '#f5f2ee', borderRadius: '10px', padding: '16px', marginBottom: '16px' }}>
+                      <div style={{ backgroundColor: '#f5f2ee', borderRadius: '10px', padding: '16px' }}>
                         <label style={{ ...styles.label, fontSize: '13px' }}>כיתה מועדפת לחינוך</label>
                         <div style={{ fontSize: '11px', color: '#c8baa6', marginBottom: '10px' }}>
                           אם אין העדפה, השאר ריק
                         </div>
                         <select
                           value={homeroomPref.preferred_group_id || ''}
-                          onChange={e => setHomeroomPref(p => ({ ...p, preferred_group_id: e.target.value ? parseInt(e.target.value) : null }))}
+                          onChange={e => { const next = { ...homeroomPref, preferred_group_id: e.target.value ? parseInt(e.target.value) : null }; setHomeroomPref(next); saveHomeroom(next); }}
                           style={{ ...styles.input, cursor: 'pointer' }}
                         >
                           <option value="">אין העדפה מיוחדת</option>
@@ -436,10 +490,6 @@ export default function TeacherDashboard() {
                         </select>
                       </div>
                     )}
-
-                    <button onClick={handleSaveHomeroomPref} style={{ ...styles.btnSave, fontSize: '13px', padding: '8px 16px' }}>
-                      שמור העדפות חינוך
-                    </button>
                   </div>
                 </div>
 
@@ -506,69 +556,43 @@ export default function TeacherDashboard() {
                 </div>
 
                 <div style={styles.card}>
-                  <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '4px' }}>הזן אילוצים בשפה חופשית</div>
-                  <div style={{ fontSize: '12px', color: '#8a7a6e', marginBottom: '16px' }}>לדוגמה: "יש לי חופש ביום חמישי" או "לא יכול לפני שעה 2 ביום ראשון"</div>
-                  <textarea value={freeText} onChange={e => setFreeText(e.target.value)}
-                    style={{ ...styles.input, height: '80px', resize: 'vertical', marginBottom: '12px' }}
-                    placeholder="תאר את האילוצים שלך..." />
-                  <button onClick={async () => {
-                    if (!freeText.trim()) return;
-                    setAiLoading(true);
-                    try {
-                      const response = await fetch('/api/analyze-constraints', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                        body: JSON.stringify({ text: freeText })
-                      });
-                      const data = await response.json();
-                      setAiPreview(data.constraints);
-                    } catch (e) { console.error(e); }
-                    finally { setAiLoading(false); }
-                  }} style={{ ...styles.btnSave, opacity: aiLoading ? 0.7 : 1 }} disabled={aiLoading}>
-                    {aiLoading ? 'מנתח...' : 'נתח עם AI'}
-                  </button>
-                  {aiPreview && (
-                    <div style={{ marginTop: '16px', backgroundColor: '#EDF4E8', borderRadius: '8px', padding: '12px 16px' }}>
-                      <div style={{ fontSize: '13px', color: '#4a3f35', marginBottom: '8px' }}>זוהו האילוצים הבאים:</div>
-                      {aiPreview.map((c, i) => <div key={i} style={{ fontSize: '12px', color: '#6b8f5e', marginBottom: '4px' }}>• {c.description}</div>)}
-                      <button onClick={() => setAiPreview(null)} style={{ ...styles.btnSave, marginTop: '10px', fontSize: '12px', padding: '6px 14px' }}>אשר והוסף לגריד</button>
-                    </div>
-                  )}
-                </div>
-
-                <div style={styles.card}>
                   <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '16px' }}>שעות שבועיות</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '8px' }}>
                     <div>
                       <label style={styles.label}>מינימום שעות</label>
-                      <input type="number" min="1" max="40" value={preferences.min_hours} onChange={e => setPreferences(p => ({ ...p, min_hours: parseInt(e.target.value) }))} style={styles.input} />
+                      <input type="number" min="1" max="40" value={preferences.min_hours}
+                        onChange={e => setPreferences(p => ({ ...p, min_hours: parseInt(e.target.value) || 0 }))}
+                        onBlur={() => savePreferences(preferences)}
+                        style={styles.input} />
                     </div>
                     <div>
-                      <label style={styles.label}>מכסת שעות (יעד)</label>
-                      <input type="number" min="1" max="40" value={preferences.weekly_hours_quota} onChange={e => setPreferences(p => ({ ...p, weekly_hours_quota: parseInt(e.target.value) }))} style={styles.input} />
+                      <label style={styles.label}>מכסת שעות (נקבע ע״י המנהל)</label>
+                      <div style={styles.readonlyField}>{user?.weekly_hours_quota ?? '—'}</div>
                     </div>
                     <div>
                       <label style={styles.label}>מקסימום שעות</label>
-                      <input type="number" min="1" max="40" value={preferences.max_hours} onChange={e => setPreferences(p => ({ ...p, max_hours: parseInt(e.target.value) }))} style={styles.input} />
+                      <input type="number" min="1" max="40" value={preferences.max_hours}
+                        onChange={e => setPreferences(p => ({ ...p, max_hours: parseInt(e.target.value) || 0 }))}
+                        onBlur={() => savePreferences(preferences)}
+                        style={styles.input} />
                     </div>
                   </div>
-                  <div style={{ marginBottom: '16px' }}>
+                  <div>
                     <label style={styles.label}>העדפת שיעורים</label>
                     <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                      <button onClick={() => setPreferences(p => ({ ...p, preferred_consecutive: true }))} style={styles.chipBtn(preferences.preferred_consecutive)}>רצופים</button>
-                      <button onClick={() => setPreferences(p => ({ ...p, preferred_consecutive: false }))} style={styles.chipBtn(!preferences.preferred_consecutive)}>עם הפסקות</button>
+                      <button onClick={() => setConsecutive(true)} style={styles.chipBtn(preferences.preferred_consecutive)}>רצופים</button>
+                      <button onClick={() => setConsecutive(false)} style={styles.chipBtn(!preferences.preferred_consecutive)}>עם הפסקות</button>
                     </div>
                   </div>
                 </div>
 
                 <div style={styles.card}>
-                  <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '4px' }}>דרג עדיפויות</div>
-                  <div style={{ fontSize: '12px', color: '#8a7a6e', marginBottom: '20px' }}>מה הכי חשוב לך במערכת השעות שלך?</div>
-                  <PrioritySlider label="סיום מוקדם" field="priority_early_finish" />
-                  <PrioritySlider label="הימנעות מחלונות" field="priority_no_gaps" />
-                  <PrioritySlider label="יום חופשי" field="priority_free_day" />
-                  <PrioritySlider label="שיעורים רצופים" field="priority_consecutive" />
-                  <button onClick={() => {}} style={styles.btnSave}>שמור העדפות</button>
+                  <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '4px' }}>עדיפויות</div>
+                  <div style={{ fontSize: '12px', color: '#8a7a6e', marginBottom: '8px' }}>הפעל/י את מה שחשוב לך במערכת השעות. מה שמופעל יילקח בחשבון כהעדפה רכה.</div>
+                  <PriorityToggle label="סיום מוקדם" field="priority_early_finish" />
+                  <PriorityToggle label="הימנעות מחלונות" field="priority_no_gaps" />
+                  <PriorityToggle label="יום חופשי" field="priority_free_day" />
+                  <PriorityToggle label="שיעורים רצופים" field="priority_consecutive" />
                 </div>
               </>
             )}
