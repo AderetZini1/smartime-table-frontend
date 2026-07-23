@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations } from '../services/api';
+import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications } from '../services/api';
 import AddTeacherModal from '../components/AddTeacherModal';
 import AddRoomModal from '../components/AddRoomModal';
 import AddSubjectModal from '../components/AddSubjectModal';
@@ -23,7 +23,6 @@ const REQUEST_TYPES = {
   general: 'פנייה כללית',
 };
 
-// Views for the schedule browser
 const VIEW_TYPES = [
   { id: 'class', label: 'כיתה' },
   { id: 'teacher', label: 'מורה' },
@@ -31,7 +30,6 @@ const VIEW_TYPES = [
   { id: 'grade', label: 'שכבה' },
 ];
 
-// Day 1 = Sunday ... 6 = Friday. Friday only reaches hour 4.
 const DAY_NAMES_BY_NUM = { 1: 'ראשון', 2: 'שני', 3: 'שלישי', 4: 'רביעי', 5: 'חמישי', 6: 'שישי' };
 const DAY_ORDER = [1, 2, 3, 4, 5, 6];
 const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -39,7 +37,6 @@ const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
 const statusLabel = (s) => ({ pending: 'ממתין', approved: 'אושר', rejected: 'נדחה' }[s] || s);
 const statusColor = (s) => ({ pending: '#c8baa6', approved: '#8a9e78', rejected: '#c0705a' }[s] || '#c8baa6');
 
-// "כיתה א1" -> "א"
 const extractGrade = (groupName) => {
   const match = groupName.match(/כיתה\s*([א-ת])/);
   if (match) return match[1];
@@ -92,8 +89,12 @@ export default function AdminDashboard() {
   const [response, setResponse] = useState({ status: 'approved', admin_response: '' });
   const [newWindow, setNewWindow] = useState({ title: '', start_date: '', end_date: '' });
   const [pendingCount, setPendingCount] = useState(0);
-
-  // ---- schedule generation + browsing state (port 8001) ----
+  const [confirmModal, setConfirmModal] = useState(null);
+  const [notifTitle, setNotifTitle] = useState('');
+  const [notifBody, setNotifBody] = useState('');
+  const [notifSending, setNotifSending] = useState(false);
+  const [showNotifForm, setShowNotifForm] = useState(false);
+  const [sentNotifs, setSentNotifs] = useState([]);
   const [entries, setEntries] = useState([]);
   const [runInfo, setRunInfo] = useState(null);
   const [generating, setGenerating] = useState(false);
@@ -102,8 +103,8 @@ export default function AdminDashboard() {
   const [publishMsg, setPublishMsg] = useState('');
   const [violations, setViolations] = useState(null);
   const [showViolations, setShowViolations] = useState(false);
-  const [filterType, setFilterType] = useState('class'); // class | teacher | subject | grade
-  const [selectedValues, setSelectedValues] = useState([]); // multi-select
+  const [filterType, setFilterType] = useState('class');
+  const [selectedValues, setSelectedValues] = useState([]);
   const [search, setSearch] = useState('');
   const [tilesExpanded, setTilesExpanded] = useState(false);
 
@@ -192,12 +193,12 @@ export default function AdminDashboard() {
   };
 
   const handleDelete = async (type, id) => {
-    if (!window.confirm('למחוק?')) return;
     if (type === 'teacher') { await deleteTeacher(id); setTeachers(prev => prev.filter(x => x.id !== id)); }
     if (type === 'room') { await deleteRoom(id); setRooms(prev => prev.filter(x => x.id !== id)); }
     if (type === 'subject') { await deleteSubject(id); setSubjects(prev => prev.filter(x => x.id !== id)); }
     if (type === 'group') { await deleteStudentGroup(id); setGroups(prev => prev.filter(x => x.id !== id)); }
     if (type === 'window') { await deleteSubmissionWindow(id); setWindows(prev => prev.filter(x => x.id !== id)); }
+    setConfirmModal(null);
   };
 
   const handleRespond = async () => {
@@ -219,9 +220,24 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleSendNotification = async () => {
+    if (!notifTitle.trim() || !notifBody.trim()) return;
+    setNotifSending(true);
+    try {
+      await sendNotification({ title: notifTitle, body: notifBody });
+      setSentNotifs(prev => [{ id: Date.now(), title: notifTitle, body: notifBody, created_at: new Date() }, ...prev]);
+      setNotifTitle('');
+      setNotifBody('');
+      setShowNotifForm(false);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setNotifSending(false);
+    }
+  };
+
   const initials = (t) => `${t.first_name?.[0] || ''}${t.last_name?.[0] || ''}`;
 
-  // ----- schedule browsing helpers -----
   const tileOptions = () => {
     const set = new Set();
     entries.forEach(e => {
@@ -230,10 +246,7 @@ export default function AdminDashboard() {
       else if (filterType === 'subject') set.add(e.subject_name);
       else if (filterType === 'grade') set.add(extractGrade(e.group_name));
     });
-    return Array.from(set)
-      .filter(Boolean)
-      .filter(o => !search || o.includes(search))
-      .sort((a, b) => a.localeCompare(b, 'he'));
+    return Array.from(set).filter(Boolean).filter(o => !search || o.includes(search)).sort((a, b) => a.localeCompare(b, 'he'));
   };
 
   const options = activeTab === 'schedule' ? tileOptions() : [];
@@ -245,12 +258,10 @@ export default function AdminDashboard() {
     setTilesExpanded(false);
   };
 
-  // toggle a tile: add if new, remove if already selected
   const toggleValue = (val) => {
     setSelectedValues(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
   };
 
-  // entries that match a specific selected value, for its own grid
   const entriesFor = (val) => entries.filter(e => {
     if (filterType === 'class') return e.group_name === val;
     if (filterType === 'teacher') return `${e.teacher_first_name} ${e.teacher_last_name}` === val;
@@ -263,7 +274,6 @@ export default function AdminDashboard() {
 
   return (
     <div style={styles.layout}>
-
       <div style={styles.sidebar}>
         <div style={styles.sidebarTop}>
           <div style={styles.brand}>SMARTIME</div>
@@ -309,9 +319,13 @@ export default function AdminDashboard() {
           {activeTab === 'rooms' && <button style={styles.btnAdd} onClick={() => setModal('room')}><i className="ti ti-plus" aria-hidden="true"></i> הוסף חדר</button>}
           {activeTab === 'subjects' && <button style={styles.btnAdd} onClick={() => setModal('subject')}><i className="ti ti-plus" aria-hidden="true"></i> הוסף מקצוע</button>}
           {activeTab === 'groups' && <button style={styles.btnAdd} onClick={() => setModal('group')}><i className="ti ti-plus" aria-hidden="true"></i> הוסף קבוצה</button>}
+          {activeTab === 'notifications' && (
+            <button style={styles.btnAdd} onClick={() => setShowNotifForm(true)}>
+              <i className="ti ti-plus" aria-hidden="true"></i> התראה חדשה
+            </button>
+          )}
         </div>
 
-        {/* פניות מורים */}
         {activeTab === 'requests' && (
           <div style={styles.card}>
             {requests.length === 0 ? (
@@ -338,9 +352,7 @@ export default function AdminDashboard() {
                       {statusLabel(req.status)}
                     </span>
                     {req.status === 'pending' && (
-                      <button onClick={() => { setRespondModal(req); setResponse({ status: 'approved', admin_response: '' }); }} style={styles.btnAdd}>
-                        טפל
-                      </button>
+                      <button onClick={() => { setRespondModal(req); setResponse({ status: 'approved', admin_response: '' }); }} style={styles.btnAdd}>טפל</button>
                     )}
                   </div>
                 </div>
@@ -350,7 +362,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* חלונות הגשה */}
         {activeTab === 'windows' && (
           <>
             <div style={styles.card}>
@@ -373,7 +384,6 @@ export default function AdminDashboard() {
                 <i className="ti ti-plus" aria-hidden="true"></i> צור חלון
               </button>
             </div>
-
             <div style={styles.card}>
               <div style={styles.tableHeader}>
                 <div style={{ flex: 3 }}>כותרת</div>
@@ -400,7 +410,7 @@ export default function AdminDashboard() {
                       </span>
                     </div>
                     <div style={{ width: '40px' }}>
-                      <i className="ti ti-trash" onClick={() => handleDelete('window', w.id)} style={styles.iconBtn} aria-hidden="true"></i>
+                      <i className="ti ti-trash" onClick={() => setConfirmModal({ type: 'window', id: w.id, name: w.title })} style={styles.iconBtn} aria-hidden="true"></i>
                     </div>
                   </div>
                 );
@@ -409,7 +419,6 @@ export default function AdminDashboard() {
           </>
         )}
 
-        {/* Teachers */}
         {activeTab === 'teachers' && (
           <div style={styles.card}>
             <div style={styles.tableHeader}>
@@ -433,14 +442,13 @@ export default function AdminDashboard() {
                 </div>
                 <div style={{ width: '88px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                   <i className="ti ti-edit" style={styles.iconBtn} aria-hidden="true"></i>
-                  <i className="ti ti-trash" onClick={() => handleDelete('teacher', teacher.id)} style={styles.iconBtn} aria-hidden="true"></i>
+                  <i className="ti ti-trash" onClick={() => setConfirmModal({ type: 'teacher', id: teacher.id, name: `${teacher.first_name} ${teacher.last_name}` })} style={styles.iconBtn} aria-hidden="true"></i>
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {/* Rooms */}
         {activeTab === 'rooms' && (
           <div style={styles.card}>
             <div style={styles.tableHeader}>
@@ -454,14 +462,13 @@ export default function AdminDashboard() {
                 <div style={{ flex: 1 }}>{room.capacity} מקומות</div>
                 <div style={{ width: '52px', display: 'flex', gap: '10px' }}>
                   <i className="ti ti-edit" style={styles.iconBtn} aria-hidden="true"></i>
-                  <i className="ti ti-trash" onClick={() => handleDelete('room', room.id)} style={styles.iconBtn} aria-hidden="true"></i>
+                  <i className="ti ti-trash" onClick={() => setConfirmModal({ type: 'room', id: room.id, name: room.room_name })} style={styles.iconBtn} aria-hidden="true"></i>
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {/* Subjects */}
         {activeTab === 'subjects' && (
           <div style={styles.card}>
             <div style={styles.tableHeader}>
@@ -477,14 +484,13 @@ export default function AdminDashboard() {
                 </div>
                 <div style={{ width: '52px', display: 'flex', gap: '10px' }}>
                   <i className="ti ti-edit" style={styles.iconBtn} aria-hidden="true"></i>
-                  <i className="ti ti-trash" onClick={() => handleDelete('subject', subject.id)} style={styles.iconBtn} aria-hidden="true"></i>
+                  <i className="ti ti-trash" onClick={() => setConfirmModal({ type: 'subject', id: subject.id, name: subject.subject_name })} style={styles.iconBtn} aria-hidden="true"></i>
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {/* Groups */}
         {activeTab === 'groups' && (
           <div style={styles.card}>
             <div style={styles.tableHeader}>
@@ -500,32 +506,22 @@ export default function AdminDashboard() {
                 <div style={{ flex: 2, color: '#8a7a6e' }}>{rooms.find(r => r.id === group.home_room_id)?.room_name || '—'}</div>
                 <div style={{ width: '52px', display: 'flex', gap: '10px' }}>
                   <i className="ti ti-edit" style={styles.iconBtn} aria-hidden="true"></i>
-                  <i className="ti ti-trash" onClick={() => handleDelete('group', group.id)} style={styles.iconBtn} aria-hidden="true"></i>
+                  <i className="ti ti-trash" onClick={() => setConfirmModal({ type: 'group', id: group.id, name: group.group_name })} style={styles.iconBtn} aria-hidden="true"></i>
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {/* ===================== מערכת שעות ===================== */}
         {activeTab === 'schedule' && (
           <>
-            {/* סרגל יצירה ופרסום */}
             <div style={{ ...styles.card, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                <button
-                  onClick={handleGenerate}
-                  disabled={generating}
-                  style={{ ...styles.btnAdd, opacity: generating ? 0.7 : 1, cursor: generating ? 'not-allowed' : 'pointer' }}
-                >
+                <button onClick={handleGenerate} disabled={generating} style={{ ...styles.btnAdd, opacity: generating ? 0.7 : 1, cursor: generating ? 'not-allowed' : 'pointer' }}>
                   <i className={`ti ${generating ? 'ti-loader' : 'ti-wand'}`} aria-hidden="true"></i>
                   {generating ? 'בתהליך יצירה…' : 'צור מערכת שעות'}
                 </button>
-                <button
-                  onClick={handlePublish}
-                  disabled={publishing || !runInfo}
-                  style={{ ...styles.btnAdd, backgroundColor: '#6b8f5e', opacity: (publishing || !runInfo) ? 0.55 : 1, cursor: (publishing || !runInfo) ? 'not-allowed' : 'pointer' }}
-                >
+                <button onClick={handlePublish} disabled={publishing || !runInfo} style={{ ...styles.btnAdd, backgroundColor: '#6b8f5e', opacity: (publishing || !runInfo) ? 0.55 : 1, cursor: (publishing || !runInfo) ? 'not-allowed' : 'pointer' }}>
                   <i className="ti ti-send" aria-hidden="true"></i>
                   {publishing ? 'מפרסם…' : (runInfo?.is_published ? 'פרסם מחדש' : 'פרסם לצוות')}
                 </button>
@@ -534,17 +530,8 @@ export default function AdminDashboard() {
                 {generating && <div>היצירה עשויה לקחת עד כ-3 דקות. אפשר להמתין כאן.</div>}
                 {genError && <div style={{ color: '#c0705a' }}>{genError}</div>}
                 {publishMsg && <div style={{ color: '#6b8f5e' }}>{publishMsg}</div>}
-                {runInfo && !generating && (
-                  <div>המערכת נוצרה ע״י <strong>{runInfo.algorithm}</strong> · ציון {runInfo.score}{runInfo.is_published ? ' · פורסם' : ' · טרם פורסם'}</div>
-                )}
-                {runInfo && (
-                  <button
-                    onClick={openViolations}
-                    style={{ ...styles.btnOutline, marginTop: '8px' }}
-                  >
-                    <i className="ti ti-alert-triangle" aria-hidden="true"></i> הפרות שנמצאו
-                  </button>
-                )}
+                {runInfo && !generating && <div>המערכת נוצרה ע״י <strong>{runInfo.algorithm}</strong> · ציון {runInfo.score}{runInfo.is_published ? ' · פורסם' : ' · טרם פורסם'}</div>}
+                {runInfo && <button onClick={openViolations} style={{ ...styles.btnOutline, marginTop: '8px' }}><i className="ti ti-alert-triangle" aria-hidden="true"></i> הפרות שנמצאו</button>}
               </div>
             </div>
 
@@ -557,31 +544,16 @@ export default function AdminDashboard() {
               </div>
             ) : (
               <>
-                {/* בורר תצוגה + חיפוש */}
                 <div style={{ ...styles.card, display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                     {VIEW_TYPES.map(v => (
-                      <button key={v.id} onClick={() => selectView(v.id)} style={styles.viewBtn(filterType === v.id)}>
-                        {v.label}
-                      </button>
+                      <button key={v.id} onClick={() => selectView(v.id)} style={styles.viewBtn(filterType === v.id)}>{v.label}</button>
                     ))}
-                    <input
-                      style={{ ...styles.search, marginRight: 'auto' }}
-                      placeholder="חיפוש…"
-                      value={search}
-                      onChange={e => setSearch(e.target.value)}
-                    />
+                    <input style={{ ...styles.search, marginRight: 'auto' }} placeholder="חיפוש…" value={search} onChange={e => setSearch(e.target.value)} />
                   </div>
-
-                  {/* שורת אריחים */}
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', width: '100%', minWidth: 0 }}>
                     <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                      <div style={{
-                        display: 'flex', gap: '10px',
-                        overflowX: tilesExpanded ? 'visible' : 'auto',
-                        flexWrap: tilesExpanded ? 'wrap' : 'nowrap',
-                        paddingBottom: '8px',
-                      }}>
+                      <div style={{ display: 'flex', gap: '10px', overflowX: tilesExpanded ? 'visible' : 'auto', flexWrap: tilesExpanded ? 'wrap' : 'nowrap', paddingBottom: '8px' }}>
                         {options.length === 0 ? (
                           <div style={{ color: '#c8baa6', fontSize: '13px', padding: '8px' }}>לא נמצאו תוצאות</div>
                         ) : options.map(o => {
@@ -596,21 +568,16 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                     {options.length > 0 && (
-                      <button
-                        style={styles.arrowBtn}
-                        title={tilesExpanded ? 'צמצם' : 'הצג הכל'}
-                        onClick={() => setTilesExpanded(v => !v)}
-                      >
+                      <button style={styles.arrowBtn} title={tilesExpanded ? 'צמצם' : 'הצג הכל'} onClick={() => setTilesExpanded(v => !v)}>
                         <i className={`ti ${tilesExpanded ? 'ti-chevron-up' : 'ti-chevron-left'}`} aria-hidden="true"></i>
                       </button>
                     )}
                   </div>
                 </div>
 
-                {/* גרידים — אחד לכל פריט שנבחר, בערימה מלמעלה למטה */}
                 {selectedValues.length === 0 ? (
                   <div style={{ ...styles.card, textAlign: 'center', color: '#c8baa6', padding: '40px' }}>
-                    בחר/י פריט אחד או יותר מהשורה למעלה כדי להציג מערכת שעות. אפשר לבחור כמה יחד.
+                    בחר/י פריט אחד או יותר מהשורה למעלה כדי להציג מערכת שעות.
                   </div>
                 ) : (
                   selectedValues.map(val => {
@@ -620,7 +587,7 @@ export default function AdminDashboard() {
                       <div key={val} style={styles.card}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                           <h3 style={{ fontSize: '16px', color: '#4a3f35', margin: 0 }}>{tileLabel(val)}</h3>
-                          <button onClick={() => toggleValue(val)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c8baa6', fontSize: '13px', fontFamily: 'Varela Round, sans-serif' }} title="הסתר">
+                          <button onClick={() => toggleValue(val)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c8baa6', fontSize: '13px', fontFamily: 'Varela Round, sans-serif' }}>
                             <i className="ti ti-x" aria-hidden="true"></i> הסתר
                           </button>
                         </div>
@@ -643,12 +610,8 @@ export default function AdminDashboard() {
                                         {lessons.map((e, idx) => (
                                           <div key={idx} style={styles.lessonBox}>
                                             <div style={{ fontWeight: 600 }}>{e.subject_name}</div>
-                                            {filterType !== 'teacher' && (
-                                              <div style={{ color: '#8a7a6e' }}>{e.teacher_first_name} {e.teacher_last_name}</div>
-                                            )}
-                                            {filterType !== 'class' && (
-                                              <div style={{ color: '#8a7a6e' }}>{e.group_name}</div>
-                                            )}
+                                            {filterType !== 'teacher' && <div style={{ color: '#8a7a6e' }}>{e.teacher_first_name} {e.teacher_last_name}</div>}
+                                            {filterType !== 'class' && <div style={{ color: '#8a7a6e' }}>{e.group_name}</div>}
                                             {e.room_name && <div style={{ color: '#a99', fontSize: '10px' }}>{e.room_name}</div>}
                                           </div>
                                         ))}
@@ -670,22 +633,25 @@ export default function AdminDashboard() {
         )}
 
         {activeTab === 'notifications' && (
-          <div style={{ ...styles.card, minHeight: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ textAlign: 'center', color: '#c8baa6' }}>
-              <i className={`ti ${TABS.find(t => t.id === activeTab)?.icon}`} style={{ fontSize: '36px', display: 'block', marginBottom: '14px' }} aria-hidden="true"></i>
-              <div style={{ fontSize: '15px' }}>{TABS.find(t => t.id === activeTab)?.label} — בקרוב</div>
-            </div>
+          <div style={styles.card}>
+            {sentNotifs.length === 0 ? (
+              <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px', fontSize: '14px' }}>אין התראות עדיין</div>
+            ) : sentNotifs.map((n, i) => (
+              <div key={n.id} style={{ padding: '16px 0', borderBottom: i < sentNotifs.length - 1 ? '1px solid #f0ebe3' : 'none' }}>
+                <div style={{ fontSize: '14px', color: '#4a3f35', marginBottom: '4px' }}>{n.title}</div>
+                <div style={{ fontSize: '13px', color: '#8a7a6e', marginBottom: '6px' }}>{n.body}</div>
+                <div style={{ fontSize: '11px', color: '#c8baa6' }}>{new Date(n.created_at).toLocaleString('he-IL')}</div>
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {/* Modals */}
       {modal === 'teacher' && <AddTeacherModal onClose={() => setModal(null)} onAdded={t => setTeachers(prev => [...prev, t])} />}
       {modal === 'room' && <AddRoomModal onClose={() => setModal(null)} onAdded={r => setRooms(prev => [...prev, r])} />}
       {modal === 'subject' && <AddSubjectModal onClose={() => setModal(null)} onAdded={sub => setSubjects(prev => [...prev, sub])} rooms={rooms} />}
       {modal === 'group' && <AddGroupModal onClose={() => setModal(null)} onAdded={g => setGroups(prev => [...prev, g])} rooms={rooms} />}
 
-      {/* Respond Modal */}
       {respondModal && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setRespondModal(null)}>
           <div style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1px solid #e2dacc', padding: '36px', width: '460px' }} onClick={e => e.stopPropagation()} dir="rtl">
@@ -714,6 +680,7 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+
       {showViolations && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowViolations(false)}>
           <div style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1px solid #e2dacc', padding: '28px', width: '640px', maxWidth: '92vw', maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()} dir="rtl">
@@ -721,7 +688,6 @@ export default function AdminDashboard() {
               <h2 style={{ fontSize: '18px', color: '#4a3f35', margin: 0 }}>הפרות שנמצאו במערכת</h2>
               <button onClick={() => setShowViolations(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c8baa6', fontSize: '20px' }}>✕</button>
             </div>
-
             {violations === null ? (
               <div style={{ textAlign: 'center', color: '#c8baa6', padding: '30px' }}>טוען…</div>
             ) : violations.length === 0 ? (
@@ -745,6 +711,48 @@ export default function AdminDashboard() {
                 ))}
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {confirmModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setConfirmModal(null)}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1px solid #e2dacc', padding: '36px', width: '400px' }} onClick={e => e.stopPropagation()} dir="rtl">
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <i className="ti ti-trash" style={{ fontSize: '32px', color: '#c0705a', display: 'block', marginBottom: '12px' }} aria-hidden="true"></i>
+              <div style={{ fontSize: '16px', color: '#4a3f35', marginBottom: '8px' }}>מחיקה</div>
+              <div style={{ fontSize: '13px', color: '#8a7a6e' }}>האם למחוק את <strong>{confirmModal.name}</strong>?</div>
+            </div>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button onClick={() => setConfirmModal(null)} style={styles.btnOutline}>ביטול</button>
+              <button onClick={() => handleDelete(confirmModal.type, confirmModal.id)} style={{ ...styles.btnAdd, backgroundColor: '#c0705a' }}>מחק</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showNotifForm && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowNotifForm(false)}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1px solid #e2dacc', padding: '36px', width: '460px' }} onClick={e => e.stopPropagation()} dir="rtl">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '18px', color: '#4a3f35', margin: 0 }}>שלח התראה חדשה</h2>
+              <button onClick={() => setShowNotifForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c8baa6', fontSize: '20px' }}>✕</button>
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={styles.label}>כותרת</label>
+              <input style={styles.input} value={notifTitle} onChange={e => setNotifTitle(e.target.value)} placeholder="נושא ההתראה" />
+            </div>
+            <div style={{ marginBottom: '24px' }}>
+              <label style={styles.label}>תוכן ההודעה</label>
+              <textarea style={{ ...styles.input, height: '100px', resize: 'vertical' }} value={notifBody} onChange={e => setNotifBody(e.target.value)} placeholder="כתוב את ההודעה כאן..." />
+            </div>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowNotifForm(false)} style={styles.btnOutline}>ביטול</button>
+              <button onClick={handleSendNotification} style={styles.btnAdd} disabled={notifSending}>
+                <i className="ti ti-send" aria-hidden="true"></i>
+                {notifSending ? 'שולח...' : 'שלח לכולם'}
+              </button>
+            </div>
           </div>
         </div>
       )}

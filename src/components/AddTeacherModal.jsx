@@ -27,7 +27,7 @@ const schema = yup.object({
 });
 
 export default function AddTeacherModal({ onClose, onAdded }) {
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({
+  const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm({
     resolver: yupResolver(schema),
     defaultValues: { teacher_color: '#8a9e78' }
   });
@@ -40,6 +40,12 @@ export default function AddTeacherModal({ onClose, onAdded }) {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const generatePassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    const pwd = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    setValue('password', pwd);
   };
 
   const inputStyle = (hasError) => ({
@@ -109,7 +115,10 @@ export default function AddTeacherModal({ onClose, onAdded }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '28px' }}>
             <div>
               <label style={labelStyle}>סיסמה זמנית * <span style={{ color: '#c8baa6', fontSize: '11px' }}>(מינימום 6 תווים)</span></label>
-              <input {...register('password')} type="password" style={inputStyle(errors.password)} placeholder="סיסמה ראשונית" />
+              <button type="button" onClick={generatePassword} style={{ marginBottom: '8px', padding: '7px 12px', backgroundColor: 'transparent', border: '1px solid #e2dacc', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', color: '#8a7a6e', fontFamily: 'Varela Round, sans-serif' }}>
+                צור סיסמה אוטומטית
+              </button>
+              <input {...register('password')} type="text" style={inputStyle(errors.password)} placeholder="סיסמה ראשונית" />
               {errors.password && <p style={errorStyle}>{errors.password.message}</p>}
             </div>
             <div>

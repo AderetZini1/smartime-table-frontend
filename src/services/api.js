@@ -111,4 +111,10 @@ export const verifyResetCode = (email, code) =>
 export const setNewPassword = (email, code, password, confirm_password) =>
   axios.post(`${API2_URL}/auth/set-new-password`, { email, code, password, confirm_password });
 
+// Notifications
+export const sendNotification = (data) => api.post('/notifications/', data);
+export const getMyNotifications = () => api.get('/notifications/me');
+export const markNotificationRead = (id) => api.patch(`/notifications/me/${id}/read`);
+export const getNotifications = () => api.get('/notifications/admin');
+
 export default api;
