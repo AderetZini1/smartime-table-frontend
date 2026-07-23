@@ -116,6 +116,10 @@ export default function AdminDashboard() {
     if (activeTab === 'schedule') { getStudentGroups().then(r => setGroups(r.data)); loadSchedule(); }
     if (activeTab === 'requests') getMyRequests().then(r => { setRequests(r.data); setPendingCount(r.data.filter(x => x.status === 'pending').length); });
     if (activeTab === 'windows') getSubmissionWindows().then(r => setWindows(r.data));
+    if (activeTab === 'notifications') {
+      getNotifications().then(r => setSentNotifs(r.data)).catch(() => {});
+    }
+    
   }, [activeTab]);
 
   useEffect(() => {
