@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule, getMyPreferences, saveMyPreferences } from '../services/api';
+import { updateTeacher, getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule, getMyPreferences, saveMyPreferences } from '../services/api';
 
 const DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'];
 const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -10,6 +10,16 @@ const GRADE_LABELS = { 1: "א'", 2: "ב'", 3: "ג'", 4: "ד'", 5: "ה'", 6: "ו'
 // For the "my schedule" grid: day_of_week 1..6 -> Hebrew name
 const DAY_NAMES_BY_NUM = { 1: 'ראשון', 2: 'שני', 3: 'שלישי', 4: 'רביעי', 5: 'חמישי', 6: 'שישי' };
 const DAY_ORDER = [1, 2, 3, 4, 5, 6];
+
+// dd.mm.yyyy from an ISO timestamp
+function fmtDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}.${mm}.${d.getFullYear()}`;
+}
 
 const REQUEST_TYPES = [
   { value: 'constraint_change', label: 'שינוי אילוץ' },
@@ -129,6 +139,8 @@ export default function TeacherDashboard() {
   const [newRequest, setNewRequest] = useState({ request_type: 'constraint_change', description: '' });
   const [requestSent, setRequestSent] = useState(false);
   const [profile, setProfile] = useState({ first_name: '', last_name: '', email: '', phone_number: '' });
+  const [profileBaseline, setProfileBaseline] = useState({ first_name: '', last_name: '', email: '', phone_number: '' });
+  const [profileSaved, setProfileSaved] = useState(false);
   const [hasNewNotification, setHasNewNotification] = useState(false);
   const prevAnsweredCount = useRef(0);
   const [subjects, setSubjects] = useState([]);
@@ -153,7 +165,11 @@ export default function TeacherDashboard() {
   const [scheduleError, setScheduleError] = useState('');
 
   useEffect(() => {
-    if (user) setProfile({ first_name: user.first_name, last_name: user.last_name, email: user.email, phone_number: user.phone_number || '' });
+    if (user) {
+      const p = { first_name: user.first_name || '', last_name: user.last_name || '', email: user.email || '', phone_number: user.phone_number || '' };
+      setProfile(p);
+      setProfileBaseline(p);
+    }
   }, [user]);
 
   useEffect(() => {
@@ -288,15 +304,34 @@ export default function TeacherDashboard() {
     try { await saveMyHomeroomPref(next); } catch (e) { /* silent */ }
   };
 
-  const handleToggleSubject = async (subject) => {
+  const profileDirty = JSON.stringify(profile) !== JSON.stringify(profileBaseline);
+
+  const handleSaveProfile = async () => {
+    try {
+      await updateTeacher(user.id, {
+        first_name: profile.first_name,
+        last_name: profile.last_name,
+        email: profile.email,
+        phone_number: profile.phone_number,
+      });
+      setProfileBaseline(profile);
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 2000);
+    } catch (e) { /* silent */ }
+  };
+
+  const handleCancelProfile = () => setProfile(profileBaseline);
+
+  const handleToggleSubject = (subject) => {
     const selected = mySubjects.includes(subject.id);
-    if (selected) {
-      await removeMySubject(subject.id);
-      setMySubjects(prev => prev.filter(id => id !== subject.id));
-    } else {
-      await addMySubject(subject.id);
-      setMySubjects(prev => [...prev, subject.id]);
-    }
+    // Optimistic: flip the UI immediately, then sync to the server.
+    // This also prevents the rapid-click duplicate-add (400) bug.
+    setMySubjects(prev => selected ? prev.filter(id => id !== subject.id) : [...prev, subject.id]);
+    const call = selected ? removeMySubject(subject.id) : addMySubject(subject.id);
+    call.catch(() => {
+      // revert if the server rejected it
+      setMySubjects(prev => selected ? [...prev, subject.id] : prev.filter(id => id !== subject.id));
+    });
   };
 
   // Preferences auto-save (sends the whole preferences object every time).
@@ -371,26 +406,38 @@ export default function TeacherDashboard() {
         {activeTab === 'profile' && (
           <div style={styles.card}>
             <div style={{ fontSize: '12px', color: '#c8baa6', marginBottom: '18px' }}>
-              הפרטים האישיים ניתנים לצפייה בלבד. לעדכון פרטים, יש לפנות למנהל/ת המערכת.
+              ניתן לעדכן את הפרטים האישיים. השינויים יישמרו לאחר לחיצה על "שמור שינויים".
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
               <div>
                 <label style={styles.label}>שם פרטי</label>
-                <div style={styles.readonlyField}>{profile.first_name || '—'}</div>
+                <input style={styles.input} value={profile.first_name} onChange={e => setProfile(p => ({ ...p, first_name: e.target.value }))} />
               </div>
               <div>
                 <label style={styles.label}>שם משפחה</label>
-                <div style={styles.readonlyField}>{profile.last_name || '—'}</div>
+                <input style={styles.input} value={profile.last_name} onChange={e => setProfile(p => ({ ...p, last_name: e.target.value }))} />
               </div>
             </div>
             <div style={{ marginBottom: '16px' }}>
               <label style={styles.label}>אימייל</label>
-              <div style={styles.readonlyField}>{profile.email || '—'}</div>
+              <input style={styles.input} value={profile.email} onChange={e => setProfile(p => ({ ...p, email: e.target.value }))} />
             </div>
             <div>
               <label style={styles.label}>טלפון</label>
-              <div style={styles.readonlyField}>{profile.phone_number || '—'}</div>
+              <input style={styles.input} value={profile.phone_number} onChange={e => setProfile(p => ({ ...p, phone_number: e.target.value }))} placeholder="05X-XXXXXXX" />
             </div>
+
+            {(profileDirty || profileSaved) && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #f0ebe3' }}>
+                {profileDirty && (
+                  <>
+                    <button onClick={handleSaveProfile} style={styles.btnSave}>שמור שינויים</button>
+                    <button onClick={handleCancelProfile} style={styles.btnOutline}>ביטול</button>
+                  </>
+                )}
+                {profileSaved && !profileDirty && <span style={{ fontSize: '13px', color: '#8a9e78' }}>✓ נשמר בהצלחה</span>}
+              </div>
+            )}
           </div>
         )}
 
@@ -439,9 +486,10 @@ export default function TeacherDashboard() {
                       {GRADES.map(grade => {
                         const selected = myGradeLevels.includes(grade);
                         return (
-                          <button key={grade} onClick={async () => {
-                            if (selected) { await removeMyGradeLevel(grade); setMyGradeLevels(prev => prev.filter(g => g !== grade)); }
-                            else { await addMyGradeLevel(grade); setMyGradeLevels(prev => [...prev, grade]); }
+                          <button key={grade} onClick={() => {
+                            setMyGradeLevels(prev => selected ? prev.filter(g => g !== grade) : [...prev, grade]);
+                            const call = selected ? removeMyGradeLevel(grade) : addMyGradeLevel(grade);
+                            call.catch(() => setMyGradeLevels(prev => selected ? [...prev, grade] : prev.filter(g => g !== grade)));
                           }} style={styles.chipBtn(selected)}>
                             כיתה {GRADE_LABELS[grade]}
                           </button>
@@ -498,7 +546,7 @@ export default function TeacherDashboard() {
                     <div>
                       <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '4px' }}>סמן זמינות</div>
                       <div style={{ fontSize: '12px', color: '#8a7a6e' }}>
-                        סמנו את המגבלות שלכם בקליק על התא: תא ריק = פנוי ללמד. לחיצה אחת - מעדיף שלא (צהוב, מגבלה רכה), לחיצה שנייה - לא יכול כלל (אדום, מגבלה קשיחה), ולחיצה שלישית מנקה את הסימון וחוזרת למצב "פנוי".
+                        סמנו את המגבלות שלכם בקליק על התא: תא ריק = פנוי ללמד. לחיצה אחת - מעדיף שלא, לחיצה שנייה - לא יכול כלל, ולחיצה שלישית מנקה את הסימון וחוזרת למצב "פנוי".
                       </div>
                       <div style={{ fontSize: '12px', color: '#8a7a6e', marginTop: '4px' }}>
                         לבחירה ישירה ומהירה, ניתן ללחוץ קליק ימני על התא ולבחור את האפשרות הרצויה מהתפריט.
@@ -507,11 +555,11 @@ export default function TeacherDashboard() {
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#8a7a6e' }}>
                         <div style={{ width: '14px', height: '14px', borderRadius: '4px', backgroundColor: '#FFF3A3', border: '1px solid #e8d88a' }}></div>
-                        מעדיף שלא (רך)
+                        מעדיף שלא
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#8a7a6e' }}>
                         <div style={{ width: '14px', height: '14px', borderRadius: '4px', backgroundColor: '#FAE8E8', border: '1px solid #e8c0b0' }}></div>
-                        לא יכול (קשיח)
+                        לא יכול
                       </div>
                     </div>
                   </div>
@@ -553,27 +601,6 @@ export default function TeacherDashboard() {
                       </tbody>
                     </table>
                   </div>
-                </div>
-
-                <div style={styles.card}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <div style={{ fontSize: '15px', color: '#4a3f35' }}>הזן אילוצים בשפה חופשית</div>
-                    <span style={{ fontSize: '11px', color: '#a08c30', backgroundColor: '#FFF3A3', border: '1px solid #e8d88a', borderRadius: '20px', padding: '2px 10px' }}>בקרוב</span>
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#8a7a6e', marginBottom: '16px' }}>
-                    בעתיד ניתן יהיה לתאר אילוצים במילים חופשיות (למשל: "יש לי חופש ביום חמישי" או "לא יכול לפני שעה 2 ביום ראשון"), והמערכת תזהה אותם אוטומטית. הכלי עדיין בפיתוח.
-                  </div>
-                  <textarea
-                    disabled
-                    placeholder="תיאור האילוצים יתאפשר בקרוב..."
-                    style={{ ...styles.input, height: '80px', resize: 'none', marginBottom: '12px', opacity: 0.6, cursor: 'not-allowed' }}
-                  />
-                  <button
-                    disabled
-                    style={{ ...styles.btnSave, opacity: 0.5, cursor: 'not-allowed' }}
-                  >
-                    נתח עם AI (בקרוב)
-                  </button>
                 </div>
 
                 <div style={styles.card}>
@@ -676,6 +703,11 @@ export default function TeacherDashboard() {
               </div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
+                {myRun?.published_at && (
+                  <div style={{ textAlign: 'left', fontSize: '12px', color: '#8a7a6e', marginBottom: '10px' }}>
+                    פורסם ב-{fmtDate(myRun.published_at)}
+                  </div>
+                )}
                 <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                   <thead>
                     <tr>
