@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications } from '../services/api';
+import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher } from '../services/api';
 import AddTeacherModal from '../components/AddTeacherModal';
+import EditModal from '../components/EditModal';
 import AddRoomModal from '../components/AddRoomModal';
 import AddSubjectModal from '../components/AddSubjectModal';
 import AddGroupModal from '../components/AddGroupModal';
@@ -99,6 +100,7 @@ export default function AdminDashboard() {
   const [newWindow, setNewWindow] = useState({ title: '', start_date: '', end_date: '' });
   const [pendingCount, setPendingCount] = useState(0);
   const [confirmModal, setConfirmModal] = useState(null);
+  const [editModal, setEditModal] = useState(null);
   const [notifTitle, setNotifTitle] = useState('');
   const [notifBody, setNotifBody] = useState('');
   const [notifSending, setNotifSending] = useState(false);
@@ -145,6 +147,13 @@ export default function AdminDashboard() {
       setEntries([]);
       setRunInfo(null);
     }
+  };
+
+  const handleEditSave = async (payload) => {
+    const { type, id } = editModal;
+    if (type === 'room') { await updateRoom(id, payload); getRooms().then(r => setRooms(r.data)); }
+    else if (type === 'subject') { await updateSubject(id, payload); getSubjects().then(r => setSubjects(r.data)); }
+    else if (type === 'group') { await updateStudentGroup(id, payload); getStudentGroups().then(r => setGroups(r.data)); }
   };
 
   const handleGenerate = async () => {
