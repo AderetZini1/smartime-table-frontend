@@ -155,7 +155,7 @@ export default function AdminDashboard() {
     else if (type === 'subject') { await updateSubject(id, payload); getSubjects().then(r => setSubjects(r.data)); }
     else if (type === 'group') { await updateStudentGroup(id, payload); getStudentGroups().then(r => setGroups(r.data)); }
   };
-
+  
   const handleGenerate = async () => {
     setGenError('');
     setGenerating(true);
@@ -484,7 +484,7 @@ export default function AdminDashboard() {
                 <div style={{ flex: 3 }}>{room.room_name}</div>
                 <div style={{ flex: 1 }}>{room.capacity} מקומות</div>
                 <div style={{ width: '52px', display: 'flex', gap: '10px' }}>
-                  <i className="ti ti-edit" style={styles.iconBtn} aria-hidden="true"></i>
+                  <i className="ti ti-edit" onClick={() => setEditModal({ type: 'room', id: room.id, values: room })} style={styles.iconBtn} aria-hidden="true"></i>
                   <i className="ti ti-trash" onClick={() => setConfirmModal({ type: 'room', id: room.id, name: room.room_name })} style={styles.iconBtn} aria-hidden="true"></i>
                 </div>
               </div>
@@ -506,7 +506,7 @@ export default function AdminDashboard() {
                   {subject.required_room_id ? rooms.find(r => r.id === subject.required_room_id)?.room_name || '—' : '—'}
                 </div>
                 <div style={{ width: '52px', display: 'flex', gap: '10px' }}>
-                  <i className="ti ti-edit" style={styles.iconBtn} aria-hidden="true"></i>
+                  <i className="ti ti-edit" onClick={() => setEditModal({ type: 'subject', id: subject.id, values: subject })} style={styles.iconBtn} aria-hidden="true"></i>
                   <i className="ti ti-trash" onClick={() => setConfirmModal({ type: 'subject', id: subject.id, name: subject.subject_name })} style={styles.iconBtn} aria-hidden="true"></i>
                 </div>
               </div>
@@ -528,7 +528,7 @@ export default function AdminDashboard() {
                 <div style={{ flex: 1 }}>{group.student_count}</div>
                 <div style={{ flex: 2, color: '#8a7a6e' }}>{rooms.find(r => r.id === group.home_room_id)?.room_name || '—'}</div>
                 <div style={{ width: '52px', display: 'flex', gap: '10px' }}>
-                  <i className="ti ti-edit" style={styles.iconBtn} aria-hidden="true"></i>
+                  <i className="ti ti-edit" onClick={() => setEditModal({ type: 'group', id: group.id, values: group })} style={styles.iconBtn} aria-hidden="true"></i>
                   <i className="ti ti-trash" onClick={() => setConfirmModal({ type: 'group', id: group.id, name: group.group_name })} style={styles.iconBtn} aria-hidden="true"></i>
                 </div>
               </div>
@@ -676,6 +676,34 @@ export default function AdminDashboard() {
       </div>
 
       {modal === 'teacher' && <AddTeacherModal onClose={() => setModal(null)} onAdded={t => setTeachers(prev => [...prev, t])} />}
+      {editModal && (
+        <EditModal
+          title={editModal.type === 'room' ? 'עריכת חדר' : editModal.type === 'subject' ? 'עריכת מקצוע' : 'עריכת קבוצה'}
+          initial={editModal.values}
+          onClose={() => setEditModal(null)}
+          onSave={handleEditSave}
+          fields={
+            editModal.type === 'room'
+              ? [
+                  { key: 'room_name', label: 'שם החדר', type: 'text' },
+                  { key: 'capacity', label: 'קיבולת', type: 'number' },
+                  { key: 'room_type', label: 'סוג חדר', type: 'text', optional: true },
+                ]
+              : editModal.type === 'subject'
+              ? [
+                  { key: 'subject_name', label: 'שם המקצוע', type: 'text' },
+                  { key: 'required_room_id', label: 'חדר נדרש', type: 'select', optional: true,
+                    options: rooms.map(r => ({ value: r.id, label: r.room_name })) },
+                ]
+              : [
+                  { key: 'group_name', label: 'שם הקבוצה', type: 'text' },
+                  { key: 'student_count', label: 'מספר תלמידים', type: 'number' },
+                  { key: 'home_room_id', label: 'חדר בית', type: 'select', optional: true,
+                    options: rooms.map(r => ({ value: r.id, label: r.room_name })) },
+                ]
+          }
+        />
+      )}
       {modal === 'room' && <AddRoomModal onClose={() => setModal(null)} onAdded={r => setRooms(prev => [...prev, r])} />}
       {modal === 'subject' && <AddSubjectModal onClose={() => setModal(null)} onAdded={sub => setSubjects(prev => [...prev, sub])} rooms={rooms} />}
       {modal === 'group' && <AddGroupModal onClose={() => setModal(null)} onAdded={g => setGroups(prev => [...prev, g])} rooms={rooms} />}
