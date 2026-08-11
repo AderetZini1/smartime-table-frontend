@@ -6,6 +6,15 @@ import AddRoomModal from '../components/AddRoomModal';
 import AddSubjectModal from '../components/AddSubjectModal';
 import AddGroupModal from '../components/AddGroupModal';
 
+function fmtDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}.${mm}.${d.getFullYear()}`;
+}
+
 const TABS = [
   { id: 'schedule', label: 'מערכת שעות', icon: 'ti-calendar' },
   { id: 'requests', label: 'פניות מורים', icon: 'ti-message' },
@@ -534,7 +543,12 @@ export default function AdminDashboard() {
                 {generating && <div>היצירה עשויה לקחת עד כ-3 דקות. אפשר להמתין כאן.</div>}
                 {genError && <div style={{ color: '#c0705a' }}>{genError}</div>}
                 {publishMsg && <div style={{ color: '#6b8f5e' }}>{publishMsg}</div>}
-                {runInfo && !generating && <div>המערכת נוצרה ע״י <strong>{runInfo.algorithm}</strong> · ציון {runInfo.score}{runInfo.is_published ? ' · פורסם' : ' · טרם פורסם'}</div>}
+                {runInfo && !generating && (
+                  <div>
+                    <div>המערכת נוצרה ע״י <strong>{runInfo.algorithm}</strong> · ציון {runInfo.score}{runInfo.run_at ? ` · תאריך: ${fmtDate(runInfo.run_at)}` : ''}</div>
+                    <div style={{ marginTop: '2px' }}>{runInfo.is_published ? `פורסם ב-${fmtDate(runInfo.published_at)}` : 'טרם פורסם'}</div>
+                  </div>
+                )}
                 {runInfo && <button onClick={openViolations} style={{ ...styles.btnOutline, marginTop: '8px' }}><i className="ti ti-alert-triangle" aria-hidden="true"></i> הפרות שנמצאו</button>}
               </div>
             </div>
