@@ -187,6 +187,7 @@ export default function AdminDashboard() {
     try {
       await publishSchedule();
       setPublishMsg('פורסם לצוות ✓');
+      setTimeout(() => setPublishMsg(''), 15000);
       await loadSchedule();
     } catch (e) {
       setPublishMsg('שגיאה בפרסום');
