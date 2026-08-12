@@ -107,6 +107,9 @@ export default function AdminDashboard() {
   const [editTeacher, setEditTeacher] = useState(null);
   const [notifTitle, setNotifTitle] = useState('');
   const [notifBody, setNotifBody] = useState('');
+  const [notifMode, setNotifMode] = useState('all');
+  const [notifTeacherIds, setNotifTeacherIds] = useState([]);
+  const [notifTeacherSearch, setNotifTeacherSearch] = useState('');
   const [notifSending, setNotifSending] = useState(false);
   const [showNotifForm, setShowNotifForm] = useState(false);
   const [sentNotifs, setSentNotifs] = useState([]);
@@ -136,6 +139,7 @@ export default function AdminDashboard() {
     if (activeTab === 'windows') getSubmissionWindows().then(r => setWindows(r.data));
     if (activeTab === 'notifications') {
       getNotifications().then(r => setSentNotifs(r.data)).catch(() => {});
+      getTeachers().then(r => setTeachers(r.data)).catch(() => {});
     }
     
   }, [activeTab]);
@@ -262,9 +266,14 @@ export default function AdminDashboard() {
     if (!notifTitle.trim() || !notifBody.trim()) return;
     setNotifSending(true);
     try {
-      await sendNotification({ title: notifTitle, body: notifBody });
+      await sendNotification({
+        title: notifTitle,
+        body: notifBody,
+        teacher_ids: notifMode === 'specific' ? notifTeacherIds : null,
+      });
       setSentNotifs(prev => [{ id: Date.now(), title: notifTitle, body: notifBody, created_at: new Date() }, ...prev]);
       setNotifTitle('');
+      setNotifMode('all'); setNotifTeacherIds([]);
       setNotifBody('');
       setShowNotifForm(false);
     } catch (e) {
@@ -947,11 +956,34 @@ export default function AdminDashboard() {
               <label style={styles.label}>תוכן ההודעה</label>
               <textarea style={{ ...styles.input, height: '100px', resize: 'vertical' }} value={notifBody} onChange={e => setNotifBody(e.target.value)} placeholder="כתוב את ההודעה כאן..." />
             </div>
+            <div style={{ marginBottom: '24px' }}>
+              <label style={styles.label}>אל</label>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: notifMode === 'specific' ? '12px' : 0 }}>
+                <button onClick={() => setNotifMode('all')} style={{ padding: '6px 14px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer', border: '1px solid #e2dacc', backgroundColor: notifMode === 'all' ? '#8a9e78' : '#f5f2ee', color: notifMode === 'all' ? '#fff' : '#8a7a6e', fontFamily: 'Varela Round, sans-serif' }}>כל המורים</button>
+                <button onClick={() => setNotifMode('specific')} style={{ padding: '6px 14px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer', border: '1px solid #e2dacc', backgroundColor: notifMode === 'specific' ? '#8a9e78' : '#f5f2ee', color: notifMode === 'specific' ? '#fff' : '#8a7a6e', fontFamily: 'Varela Round, sans-serif' }}>מורים ספציפיים</button>
+              </div>
+
+              {notifMode === 'specific' && (
+                <div style={{ border: '1px solid #e2dacc', borderRadius: '10px', padding: '10px', maxHeight: '200px', overflowY: 'auto', backgroundColor: '#FAF7F2' }}>
+                  <input value={notifTeacherSearch} onChange={e => setNotifTeacherSearch(e.target.value)} placeholder="חיפוש מורה…" style={{ ...styles.input, marginBottom: '8px' }} />
+                  {teachers.filter(t => !t.is_admin && `${t.first_name} ${t.last_name}`.includes(notifTeacherSearch.trim())).map(t => {
+                    const checked = notifTeacherIds.includes(t.id);
+                    return (
+                      <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 6px', cursor: 'pointer', borderRadius: '6px', backgroundColor: checked ? '#EDF4E8' : 'transparent' }}>
+                        <input type="checkbox" checked={checked} onChange={() => setNotifTeacherIds(prev => checked ? prev.filter(id => id !== t.id) : [...prev, t.id])} />
+                        <span style={{ fontSize: '14px', color: '#4a3f35' }}>{t.first_name} {t.last_name}</span>
+                      </label>
+                    );
+                  })}
+                  <div style={{ fontSize: '11px', color: '#c8baa6', marginTop: '6px', textAlign: 'left' }}>{notifTeacherIds.length} נבחרו</div>
+                </div>
+              )}
+            </div>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               <button onClick={() => setShowNotifForm(false)} style={styles.btnOutline}>ביטול</button>
               <button onClick={handleSendNotification} style={styles.btnAdd} disabled={notifSending}>
                 <i className="ti ti-send" aria-hidden="true"></i>
-                {notifSending ? 'שולח...' : 'שלח לכולם'}
+                {notifSending ? 'שולח...' : (notifMode === 'specific' ? `שלח ל-${notifTeacherIds.length}` : 'שלח לכולם')}
               </button>
             </div>
           </div>
