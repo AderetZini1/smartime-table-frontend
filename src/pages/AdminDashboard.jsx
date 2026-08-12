@@ -7,6 +7,7 @@ import AddRoomModal from '../components/AddRoomModal';
 import AddSubjectModal from '../components/AddSubjectModal';
 import AddGroupModal from '../components/AddGroupModal';
 import { exportSingleSchedule, exportMultiSchedule } from '../utils/exportSchedule';
+import { useNavigate } from 'react-router-dom';
 
 function fmtDate(iso) {
   if (!iso) return '';
@@ -88,6 +89,7 @@ const styles = {
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('schedule');
   const [teachers, setTeachers] = useState([]);
   const [rooms, setRooms] = useState([]);
@@ -400,6 +402,12 @@ export default function AdminDashboard() {
         </nav>
         <div style={{ padding: '0 24px' }}>
           <div style={{ fontSize: '12px', color: '#c8baa6', marginBottom: '8px' }}>{user?.first_name} {user?.last_name}</div>
+          <button
+          onClick={() => navigate('/teacher')}
+          style={{ fontSize: '13px', color: '#8a9e78', background: 'none', border: '1px solid #8a9e78', borderRadius: '8px', padding: '7px 14px', cursor: 'pointer', width: '100%', marginBottom: '8px', fontFamily: 'Varela Round, sans-serif' }}
+        >
+          <i className="ti ti-user" aria-hidden="true"></i> עבור לתצוגת מורה
+        </button>
           <button onClick={logout} style={{ ...styles.btnOutline, width: '100%' }}>התנתק</button>
         </div>
       </div>
