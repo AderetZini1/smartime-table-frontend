@@ -366,8 +366,8 @@ export default function TeacherDashboard() {
 
   const scheduleCell = (day, hour) => myEntries.filter(e => e.day_of_week === day && e.hour_of_day === hour);
 
-  const handleExportMySchedule = () => {
-    exportSingleSchedule(myEntries, {
+  const handleExportMySchedule = async () => {
+    await exportSingleSchedule(myEntries, {
       fileName: `מערכת_שעות_${user?.first_name || ''}_${user?.last_name || ''}`.trim(),
       sheetName: 'מערכת השעות שלי',
       showGroup: true,
