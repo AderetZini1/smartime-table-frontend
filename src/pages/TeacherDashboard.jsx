@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { updateTeacher, getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule, getMyPreferences, saveMyPreferences } from '../services/api';
+import { updateTeacher, getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule, getMyPreferences, saveMyPreferences, getMyNotifications, markNotificationRead } from '../services/api';
 import { exportSingleSchedule } from '../utils/exportSchedule';
 import { useNavigate } from 'react-router-dom';
 
@@ -61,6 +61,7 @@ const TABS = [
   { id: 'profile', label: 'פרופיל אישי', icon: 'ti-user' },
   { id: 'constraints', label: 'העדפות שעות', icon: 'ti-clock' },
   { id: 'requests', label: 'פניות ובקשות', icon: 'ti-message' },
+  { id: 'notifications', label: 'התראות', icon: 'ti-bell' },
   { id: 'schedule', label: 'מערכת השעות שלי', icon: 'ti-calendar' },
 ];
 
@@ -135,6 +136,7 @@ export default function TeacherDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile');
+  const [notifications, setNotifications] = useState([]);
   const [constraints, setConstraints] = useState([]);
   const [activeWindow, setActiveWindow] = useState(null);
   const [windowLoaded, setWindowLoaded] = useState(false);
@@ -222,6 +224,9 @@ export default function TeacherDashboard() {
       getMyRequests().then(r => setRequests(r.data));
       setHasNewNotification(false);
     }
+    if (activeTab === 'notifications') {
+      getMyNotifications().then(r => setNotifications(r.data)).catch(() => {});
+    }
     if (activeTab === 'schedule') {
       setScheduleLoading(true);
       setScheduleError('');
@@ -293,6 +298,13 @@ export default function TeacherDashboard() {
     setReasonModal(null);
   };
 
+  const handleMarkRead = async (id) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    markNotificationRead(id).catch(() => {
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: false } : n));
+    });
+  };
+  
   const handleSendRequest = async () => {
     if (!newRequest.description.trim()) return;
     await createRequest(newRequest);
@@ -460,6 +472,33 @@ export default function TeacherDashboard() {
           </div>
         )}
 
+        {activeTab === 'notifications' && (
+          <div style={styles.card}>
+            {notifications.length === 0 ? (
+              <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px' }}>
+                <i className="ti ti-bell-off" style={{ fontSize: '36px', display: 'block', marginBottom: '14px' }} aria-hidden="true"></i>
+                <div style={{ fontSize: '15px' }}>אין התראות</div>
+              </div>
+            ) : notifications.map((n, i) => (
+              <div key={n.id} style={{ padding: '16px', borderBottom: i < notifications.length - 1 ? '1px solid #f0ebe3' : 'none', backgroundColor: n.is_read ? 'transparent' : '#F5F8F2', borderRadius: '8px', marginBottom: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {!n.is_read && <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#8a9e78', flexShrink: 0 }} />}
+                    <span style={{ fontSize: '15px', color: '#4a3f35', fontWeight: n.is_read ? 400 : 600 }}>{n.title}</span>
+                  </div>
+                  <span style={{ fontSize: '11px', color: '#c8baa6', whiteSpace: 'nowrap', marginRight: '12px' }}>{fmtDate(n.created_at)}</span>
+                </div>
+                <div style={{ fontSize: '13px', color: '#8a7a6e', marginBottom: n.is_read ? 0 : '10px', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{n.body}</div>
+                {!n.is_read && (
+                  <button onClick={() => handleMarkRead(n.id)} style={{ ...styles.btnOutline, fontSize: '12px', padding: '5px 12px' }}>
+                    <i className="ti ti-check" aria-hidden="true"></i> סמן כנקרא
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        
         {/* העדפות שעות */}
         {activeTab === 'constraints' && (
           <>
