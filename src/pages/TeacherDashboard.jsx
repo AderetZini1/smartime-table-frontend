@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { updateTeacher, getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule, getMyPreferences, saveMyPreferences } from '../services/api';
 import { exportSingleSchedule } from '../utils/exportSchedule';
+import { useNavigate } from 'react-router-dom';
 
 const DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'];
 const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -132,6 +133,7 @@ function SubjectCheckboxGrid({ subjects, mySubjects, onToggle }) {
 
 export default function TeacherDashboard() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile');
   const [constraints, setConstraints] = useState([]);
   const [activeWindow, setActiveWindow] = useState(null);
@@ -401,6 +403,14 @@ export default function TeacherDashboard() {
         </nav>
         <div style={{ padding: '0 24px' }}>
           <div style={{ fontSize: '12px', color: '#c8baa6', marginBottom: '8px' }}>{user?.first_name} {user?.last_name}</div>
+          {user?.is_admin && (
+            <button
+              onClick={() => navigate('/admin')}
+              style={{ fontSize: '13px', color: '#8a9e78', background: 'none', border: '1px solid #8a9e78', borderRadius: '8px', padding: '7px 14px', cursor: 'pointer', width: '100%', marginBottom: '8px', fontFamily: 'Varela Round, sans-serif' }}
+            >
+              <i className="ti ti-arrow-right" aria-hidden="true"></i> חזרה לניהול
+            </button>
+          )}
           <button onClick={logout} style={{ fontSize: '13px', color: '#8a7a6e', background: 'none', border: '1px solid #e2dacc', borderRadius: '8px', padding: '7px 14px', cursor: 'pointer', width: '100%', fontFamily: 'Varela Round, sans-serif' }}>התנתק</button>
         </div>
       </div>
