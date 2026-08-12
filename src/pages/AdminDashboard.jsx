@@ -101,6 +101,7 @@ export default function AdminDashboard() {
   const [pendingCount, setPendingCount] = useState(0);
   const [confirmModal, setConfirmModal] = useState(null);
   const [editModal, setEditModal] = useState(null);
+  const [editTeacher, setEditTeacher] = useState(null);
   const [notifTitle, setNotifTitle] = useState('');
   const [notifBody, setNotifBody] = useState('');
   const [notifSending, setNotifSending] = useState(false);
@@ -464,7 +465,7 @@ export default function AdminDashboard() {
                   </span>
                 </div>
                 <div style={{ width: '88px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                  <i className="ti ti-edit" style={styles.iconBtn} aria-hidden="true"></i>
+                  <i className="ti ti-edit" onClick={() => setEditTeacher(teacher)} style={styles.iconBtn} aria-hidden="true"></i>
                   <i className="ti ti-trash" onClick={() => setConfirmModal({ type: 'teacher', id: teacher.id, name: `${teacher.first_name} ${teacher.last_name}` })} style={styles.iconBtn} aria-hidden="true"></i>
                 </div>
               </div>
@@ -674,8 +675,9 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
-
+      
       {modal === 'teacher' && <AddTeacherModal onClose={() => setModal(null)} onAdded={t => setTeachers(prev => [...prev, t])} />}
+      
       {editModal && (
         <EditModal
           title={editModal.type === 'room' ? 'עריכת חדר' : editModal.type === 'subject' ? 'עריכת מקצוע' : 'עריכת קבוצה'}
@@ -704,6 +706,15 @@ export default function AdminDashboard() {
           }
         />
       )}
+      
+      {editTeacher && (
+        <AddTeacherModal
+          teacher={editTeacher}
+          onClose={() => setEditTeacher(null)}
+          onUpdated={() => { getTeachers().then(r => setTeachers(r.data)); }}
+        />
+      )}
+      
       {modal === 'room' && <AddRoomModal onClose={() => setModal(null)} onAdded={r => setRooms(prev => [...prev, r])} />}
       {modal === 'subject' && <AddSubjectModal onClose={() => setModal(null)} onAdded={sub => setSubjects(prev => [...prev, sub])} rooms={rooms} />}
       {modal === 'group' && <AddGroupModal onClose={() => setModal(null)} onAdded={g => setGroups(prev => [...prev, g])} rooms={rooms} />}
