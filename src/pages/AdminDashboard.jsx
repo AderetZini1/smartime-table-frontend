@@ -6,6 +6,7 @@ import EditModal from '../components/EditModal';
 import AddRoomModal from '../components/AddRoomModal';
 import AddSubjectModal from '../components/AddSubjectModal';
 import AddGroupModal from '../components/AddGroupModal';
+import { exportSingleSchedule, exportMultiSchedule } from '../utils/exportSchedule';
 
 function fmtDate(iso) {
   if (!iso) return '';
@@ -116,6 +117,9 @@ export default function AdminDashboard() {
   const [violations, setViolations] = useState(null);
   const [showViolations, setShowViolations] = useState(false);
   const [filterType, setFilterType] = useState('class');
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportDim, setExportDim] = useState(null);   // null = main menu; else 'class'|'teacher'|'subject'|'grade'
+  const [exportSearch, setExportSearch] = useState('');
   const [selectedValues, setSelectedValues] = useState([]);
   const [search, setSearch] = useState('');
   const [tilesExpanded, setTilesExpanded] = useState(false);
@@ -149,6 +153,14 @@ export default function AdminDashboard() {
       setRunInfo(null);
     }
   };
+
+  const exportItemStyle = (emphasis) => ({
+    display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
+    padding: '9px 10px', fontSize: '13px', textAlign: 'right',
+    background: emphasis ? '#EDF4E8' : 'none', border: 'none', borderRadius: '8px',
+    cursor: 'pointer', color: '#4a3f35', fontFamily: 'Varela Round, sans-serif',
+    marginBottom: '2px',
+  });
 
   const handleEditSave = async (payload) => {
     const { type, id } = editModal;
@@ -293,6 +305,55 @@ export default function AdminDashboard() {
     if (filterType === 'grade') return extractGrade(e.group_name) === val;
     return false;
   });
+
+    // All distinct values for a given dimension (independent of current filterType).
+  const valuesForDim = (dim) => {
+    const set = new Set();
+    entries.forEach(e => {
+      if (dim === 'class') set.add(e.group_name);
+      else if (dim === 'teacher') set.add(`${e.teacher_first_name} ${e.teacher_last_name}`);
+      else if (dim === 'subject') set.add(e.subject_name);
+      else if (dim === 'grade') set.add(extractGrade(e.group_name));
+    });
+    return [...set].filter(Boolean).sort((a, b) => String(a).localeCompare(String(b), 'he'));
+  };
+
+  // Entries for one value within a dimension (mirrors entriesFor but dim-explicit).
+  const entriesForDim = (dim, val) => entries.filter(e => {
+    if (dim === 'class') return e.group_name === val;
+    if (dim === 'teacher') return `${e.teacher_first_name} ${e.teacher_last_name}` === val;
+    if (dim === 'subject') return e.subject_name === val;
+    if (dim === 'grade') return extractGrade(e.group_name) === val;
+    return false;
+  });
+
+  const DIM_LABEL = { class: 'כיתה', teacher: 'מורה', subject: 'מקצוע', grade: 'שכבה' };
+
+  const closeExport = () => { setExportOpen(false); setExportDim(null); setExportSearch(''); };
+
+  // Export ONE value (single sheet).
+  const exportOneValue = async (dim, val) => {
+    const showGroup = dim !== 'class';   // per-class sheets don't need the class repeated
+    await exportSingleSchedule(entriesForDim(dim, val), {
+      fileName: `מערכת_${DIM_LABEL[dim]}_${val}`,
+      sheetName: String(val),
+      showGroup,
+    });
+    closeExport();
+  };
+
+  // Export ALL values of a dimension (one sheet/tab each).
+  const exportAllOfDim = async (dim) => {
+    const showGroup = dim !== 'class';
+    const groups = valuesForDim(dim).map(val => ({ name: String(val), entries: entriesForDim(dim, val) }));
+    await exportMultiSchedule(groups, { fileName: `מערכות_לפי_${DIM_LABEL[dim]}`, showGroup });
+    closeExport();
+  };
+
+  // "Export what's open now" = all values of the CURRENT view (filterType).
+  const exportCurrent = async () => {
+    await exportAllOfDim(filterType);
+  };
 
   const tileLabel = (val) => (filterType === 'grade' ? `שכבת ${val}׳` : val);
 
@@ -579,6 +640,61 @@ export default function AdminDashboard() {
                       <button key={v.id} onClick={() => selectView(v.id)} style={styles.viewBtn(filterType === v.id)}>{v.label}</button>
                     ))}
                     <input style={{ ...styles.search, marginRight: 'auto' }} placeholder="חיפוש…" value={search} onChange={e => setSearch(e.target.value)} />
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        onClick={() => { setExportOpen(o => !o); setExportDim(null); setExportSearch(''); }}
+                        style={{ ...styles.viewBtn(false), display: 'flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <i className="ti ti-file-spreadsheet" aria-hidden="true"></i> ייצוא לאקסל
+                      </button>
+
+                      {exportOpen && (
+                        <>
+                          {/* click-away backdrop */}
+                          <div onClick={closeExport} style={{ position: 'fixed', inset: 0, zIndex: 900 }} />
+                          <div dir="rtl" style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 901, backgroundColor: '#fff', border: '1px solid #e2dacc', borderRadius: '12px', boxShadow: '0 8px 24px rgba(74,63,53,0.14)', width: '260px', padding: '8px', maxHeight: '360px', overflowY: 'auto' }}>
+
+                            {exportDim === null ? (
+                              <>
+                                <button onClick={exportCurrent} style={exportItemStyle(true)}>
+                                  <i className="ti ti-eye" aria-hidden="true"></i> ייצא את מה שפתוח כרגע
+                                </button>
+                                <div style={{ height: '1px', backgroundColor: '#f0ebe3', margin: '6px 4px' }} />
+                                {['class', 'teacher', 'subject', 'grade'].map(dim => (
+                                  <button key={dim} onClick={() => { setExportDim(dim); setExportSearch(''); }} style={exportItemStyle(false)}>
+                                    <span>ייצוא לפי {DIM_LABEL[dim]}</span>
+                                    <i className="ti ti-chevron-left" style={{ marginRight: 'auto' }} aria-hidden="true"></i>
+                                  </button>
+                                ))}
+                              </>
+                            ) : (
+                              <>
+                                <button onClick={() => setExportDim(null)} style={{ ...exportItemStyle(false), color: '#8a7a6e' }}>
+                                  <i className="ti ti-chevron-right" aria-hidden="true"></i> חזרה
+                                </button>
+                                <button onClick={() => exportAllOfDim(exportDim)} style={exportItemStyle(true)}>
+                                  <i className="ti ti-stack-2" aria-hidden="true"></i> ייצא הכל (כל {DIM_LABEL[exportDim]})
+                                </button>
+                                <input
+                                  autoFocus
+                                  value={exportSearch}
+                                  onChange={e => setExportSearch(e.target.value)}
+                                  placeholder={`חיפוש ${DIM_LABEL[exportDim]}…`}
+                                  style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', margin: '6px 0', border: '1px solid #e2dacc', borderRadius: '8px', fontSize: '13px', fontFamily: 'Varela Round, sans-serif', backgroundColor: '#FAF7F2' }}
+                                />
+                                {valuesForDim(exportDim)
+                                  .filter(v => String(v).includes(exportSearch.trim()))
+                                  .map(v => (
+                                    <button key={v} onClick={() => exportOneValue(exportDim, v)} style={exportItemStyle(false)}>
+                                      {exportDim === 'grade' ? `שכבת ${v}׳` : v}
+                                    </button>
+                                  ))}
+                              </>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', width: '100%', minWidth: 0 }}>
                     <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
