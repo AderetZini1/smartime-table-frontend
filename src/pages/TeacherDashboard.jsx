@@ -168,6 +168,7 @@ export default function TeacherDashboard() {
   const [myRun, setMyRun] = useState(null);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleError, setScheduleError] = useState('');
+  const unreadCount = notifications.filter(n => !n.is_read).length;
 
   useEffect(() => {
     if (user) {
@@ -181,6 +182,7 @@ export default function TeacherDashboard() {
     getSubjects().then(r => setSubjects(r.data)).catch(() => {});
     getMySubjects().then(r => setMySubjects(r.data.map(s => s.subject_id))).catch(() => {});
     getStudentGroups().then(r => setGroups(r.data)).catch(() => {});
+    getMyNotifications().then(r => setNotifications(r.data)).catch(() => {});
   }, []);
 
   useEffect(() => {
