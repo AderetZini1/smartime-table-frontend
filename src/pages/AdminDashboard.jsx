@@ -352,7 +352,17 @@ export default function AdminDashboard() {
 
   // "Export what's open now" = all values of the CURRENT view (filterType).
   const exportCurrent = async () => {
-    await exportAllOfDim(filterType);
+    if (selectedValues && selectedValues.length > 0) {
+      if (selectedValues.length === 1) {
+        await exportOneValue(filterType, selectedValues[0]);
+      } else {
+        const groups = selectedValues.map(val => ({ name: String(val), entries: entriesFor(val) }));
+        await exportMultiSchedule(groups, { fileName: 'מערכת_נבחרת', showGroup: filterType !== 'class' });
+        closeExport();
+      }
+    } else {
+      await exportAllOfDim(filterType);
+    }
   };
 
   const tileLabel = (val) => (filterType === 'grade' ? `שכבת ${val}׳` : val);
