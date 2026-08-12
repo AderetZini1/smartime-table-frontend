@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { updateTeacher, getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule, getMyPreferences, saveMyPreferences } from '../services/api';
+import { exportSingleSchedule } from '../utils/exportSchedule';
 
 const DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'];
 const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -365,6 +366,14 @@ export default function TeacherDashboard() {
 
   const scheduleCell = (day, hour) => myEntries.filter(e => e.day_of_week === day && e.hour_of_day === hour);
 
+  const handleExportMySchedule = () => {
+    exportSingleSchedule(myEntries, {
+      fileName: `מערכת_שעות_${user?.first_name || ''}_${user?.last_name || ''}`.trim(),
+      sheetName: 'מערכת השעות שלי',
+      showGroup: true,
+    });
+  };
+
   const PriorityToggle = ({ label, field }) => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0', borderBottom: '1px solid #f0ebe3' }}>
       <span style={{ fontSize: '14px', color: '#4a3f35' }}>{label}</span>
@@ -691,6 +700,14 @@ export default function TeacherDashboard() {
 
         {/* מערכת השעות שלי — הגריד האמיתי מהמערכת שפורסמה */}
         {activeTab === 'schedule' && (
+          <>
+            {myRun && myEntries.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
+                <button onClick={handleExportMySchedule} style={{ ...styles.btnOutline, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <i className="ti ti-file-spreadsheet" aria-hidden="true"></i> ייצוא לאקסל
+                </button>
+              </div>
+            )}
           <div style={styles.card}>
             {scheduleLoading ? (
               <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px' }}>טוען…</div>
