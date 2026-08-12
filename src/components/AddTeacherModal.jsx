@@ -1,15 +1,19 @@
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import { createTeacher } from '../services/api';
+import { createTeacher, updateTeacher } from '../services/api';
 
-const schema = yup.object({
+// In edit mode the password is optional (blank = keep current) and the
+// teacher_identity (ID) is read-only. In add mode both are required as before.
+const makeSchema = (isEdit) => yup.object({
   first_name: yup.string().required('שם פרטי הוא שדה חובה'),
   last_name: yup.string().required('שם משפחה הוא שדה חובה'),
-  teacher_identity: yup
-    .string()
-    .required('תעודת זהות היא שדה חובה')
-    .matches(/^[0-9]{9}$/, 'תעודת זהות חייבת להכיל בדיוק 9 ספרות'),
+  teacher_identity: isEdit
+    ? yup.string().nullable()
+    : yup
+        .string()
+        .required('תעודת זהות היא שדה חובה')
+        .matches(/^[0-9]{9}$/, 'תעודת זהות חייבת להכיל בדיוק 9 ספרות'),
   email: yup.string().required('אימייל הוא שדה חובה').email('כתובת אימייל לא תקינה'),
   phone_number: yup
     .string()
@@ -22,20 +26,51 @@ const schema = yup.object({
     .required('מכסת שעות היא שדה חובה')
     .min(1, 'מינימום שעה אחת')
     .max(40, 'מקסימום 40 שעות'),
-  password: yup.string().required('סיסמה היא שדה חובה').min(6, 'סיסמה חייבת להכיל לפחות 6 תווים'),
+  password: isEdit
+    ? yup.string().transform(v => v === '' ? undefined : v).min(6, 'סיסמה חייבת להכיל לפחות 6 תווים').notRequired()
+    : yup.string().required('סיסמה היא שדה חובה').min(6, 'סיסמה חייבת להכיל לפחות 6 תווים'),
   teacher_color: yup.string().default('#8a9e78'),
 });
 
-export default function AddTeacherModal({ onClose, onAdded }) {
+export default function AddTeacherModal({ onClose, onAdded, onUpdated, teacher }) {
+  const isEdit = !!teacher;
+
   const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm({
-    resolver: yupResolver(schema),
-    defaultValues: { teacher_color: '#8a9e78' }
+    resolver: yupResolver(makeSchema(isEdit)),
+    defaultValues: isEdit
+      ? {
+          first_name: teacher.first_name || '',
+          last_name: teacher.last_name || '',
+          teacher_identity: teacher.teacher_identity || '',
+          email: teacher.email || '',
+          phone_number: teacher.phone_number || '',
+          weekly_hours_quota: teacher.weekly_hours_quota ?? '',
+          teacher_color: teacher.teacher_color || '#8a9e78',
+          password: '',
+        }
+      : { teacher_color: '#8a9e78' },
   });
 
   const onSubmit = async (data) => {
     try {
-      const res = await createTeacher(data);
-      onAdded(res.data);
+      if (isEdit) {
+        // Only send fields the update endpoint accepts; omit blank password
+        // and never send teacher_identity (it can't change).
+        const payload = {
+          first_name: data.first_name,
+          last_name: data.last_name,
+          email: data.email,
+          phone_number: data.phone_number || null,
+          weekly_hours_quota: data.weekly_hours_quota,
+          teacher_color: data.teacher_color,
+        };
+        if (data.password) payload.password = data.password;
+        const res = await updateTeacher(teacher.id, payload);
+        if (onUpdated) onUpdated(res.data);
+      } else {
+        const res = await createTeacher(data);
+        if (onAdded) onAdded(res.data);
+      }
       onClose();
     } catch (err) {
       console.error(err);
@@ -48,13 +83,14 @@ export default function AddTeacherModal({ onClose, onAdded }) {
     setValue('password', pwd);
   };
 
-  const inputStyle = (hasError) => ({
+  const inputStyle = (hasError, disabled) => ({
     width: '100%', padding: '10px 14px',
     border: `1px solid ${hasError ? '#c0705a' : '#e2dacc'}`,
-    borderRadius: '8px', fontSize: '14px', color: '#4a3f35',
-    backgroundColor: hasError ? '#fff8f6' : '#FAF7F2',
+    borderRadius: '8px', fontSize: '14px', color: disabled ? '#8a7a6e' : '#4a3f35',
+    backgroundColor: disabled ? '#f0ebe3' : (hasError ? '#fff8f6' : '#FAF7F2'),
     outline: 'none', boxSizing: 'border-box',
-    fontFamily: 'Varela Round, sans-serif'
+    fontFamily: 'Varela Round, sans-serif',
+    cursor: disabled ? 'not-allowed' : 'text',
   });
 
   const labelStyle = { display: 'block', fontSize: '12px', color: '#8a7a6e', marginBottom: '6px' };
@@ -66,7 +102,7 @@ export default function AddTeacherModal({ onClose, onAdded }) {
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
           <div>
-            <h2 style={{ fontSize: '18px', color: '#4a3f35', margin: 0 }}>הוסף מורה</h2>
+            <h2 style={{ fontSize: '18px', color: '#4a3f35', margin: 0 }}>{isEdit ? 'עריכת מורה' : 'הוסף מורה'}</h2>
             <div style={{ width: '24px', height: '1.5px', backgroundColor: '#8a9e78', marginTop: '6px' }}></div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c8baa6', fontSize: '20px' }}>✕</button>
@@ -88,8 +124,10 @@ export default function AddTeacherModal({ onClose, onAdded }) {
           </div>
 
           <div style={{ marginBottom: '16px' }}>
-            <label style={labelStyle}>תעודת זהות * <span style={{ color: '#c8baa6', fontSize: '11px' }}>(9 ספרות)</span></label>
-            <input {...register('teacher_identity')} style={inputStyle(errors.teacher_identity)} placeholder="123456789" maxLength={9} />
+            <label style={labelStyle}>
+              תעודת זהות {isEdit ? <span style={{ color: '#c8baa6', fontSize: '11px' }}>(לא ניתן לשינוי)</span> : <span style={{ color: '#c8baa6', fontSize: '11px' }}>(9 ספרות)</span>}
+            </label>
+            <input {...register('teacher_identity')} style={inputStyle(errors.teacher_identity, isEdit)} placeholder="123456789" maxLength={9} readOnly={isEdit} />
             {errors.teacher_identity && <p style={errorStyle}>{errors.teacher_identity.message}</p>}
           </div>
 
@@ -114,11 +152,16 @@ export default function AddTeacherModal({ onClose, onAdded }) {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '28px' }}>
             <div>
-              <label style={labelStyle}>סיסמה זמנית * <span style={{ color: '#c8baa6', fontSize: '11px' }}>(מינימום 6 תווים)</span></label>
+              <label style={labelStyle}>
+                {isEdit ? 'איפוס סיסמה' : 'סיסמה זמנית *'}
+                {isEdit
+                  ? <span style={{ color: '#c8baa6', fontSize: '11px' }}> (השאר ריק לשמירת הקיימת)</span>
+                  : <span style={{ color: '#c8baa6', fontSize: '11px' }}> (מינימום 6 תווים)</span>}
+              </label>
               <button type="button" onClick={generatePassword} style={{ marginBottom: '8px', padding: '7px 12px', backgroundColor: 'transparent', border: '1px solid #e2dacc', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', color: '#8a7a6e', fontFamily: 'Varela Round, sans-serif' }}>
                 צור סיסמה אוטומטית
               </button>
-              <input {...register('password')} type="text" style={inputStyle(errors.password)} placeholder="סיסמה ראשונית" />
+              <input {...register('password')} type="text" style={inputStyle(errors.password)} placeholder={isEdit ? 'סיסמה חדשה (רק אם רוצים לאפס)' : 'סיסמה ראשונית'} />
               {errors.password && <p style={errorStyle}>{errors.password.message}</p>}
             </div>
             <div>
@@ -134,7 +177,7 @@ export default function AddTeacherModal({ onClose, onAdded }) {
               ביטול
             </button>
             <button type="submit" disabled={isSubmitting} style={{ padding: '10px 24px', backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontFamily: 'Varela Round, sans-serif', opacity: isSubmitting ? 0.7 : 1 }}>
-              {isSubmitting ? 'שומר...' : 'הוסף מורה'}
+              {isSubmitting ? 'שומר...' : (isEdit ? 'שמור שינויים' : 'הוסף מורה')}
             </button>
           </div>
 
