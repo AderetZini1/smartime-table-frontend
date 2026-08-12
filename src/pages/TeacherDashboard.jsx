@@ -412,6 +412,9 @@ export default function TeacherDashboard() {
               {tab.id === 'requests' && hasNewNotification && (
                 <span style={{ marginRight: 'auto', backgroundColor: '#FAE8E8', color: '#c0705a', borderRadius: '10px', padding: '2px 8px', fontSize: '12px' }}>!</span>
               )}
+              {tab.id === 'notifications' && unreadCount > 0 && (
+                <span style={{ marginRight: 'auto', backgroundColor: '#8a9e78', color: '#fff', borderRadius: '10px', padding: '1px 8px', fontSize: '12px', minWidth: '18px', textAlign: 'center' }}>{unreadCount}</span>
+              )}
             </button>
           ))}
         </nav>
