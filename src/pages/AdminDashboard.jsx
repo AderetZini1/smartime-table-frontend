@@ -702,7 +702,7 @@ export default function AdminDashboard() {
                       <button key={v.id} onClick={() => selectView(v.id)} style={styles.viewBtn(filterType === v.id)}>{v.label}</button>
                     ))}
                     <input style={{ ...styles.search, marginRight: 'auto' }} placeholder="חיפוש…" value={search} onChange={e => setSearch(e.target.value)} />
-                    <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative', display: 'flex', gap: '8px' }}>
                       <button
                         onClick={() => { setExportFormat('excel'); setExportOpen(true); setExportDim(null); setExportSearch(''); }}
                         style={{ ...styles.viewBtn(false), display: 'flex', alignItems: 'center', gap: '6px' }}
