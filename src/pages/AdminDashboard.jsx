@@ -107,6 +107,8 @@ export default function AdminDashboard() {
   const [editTeacher, setEditTeacher] = useState(null);
   const [notifTitle, setNotifTitle] = useState('');
   const [notifBody, setNotifBody] = useState('');
+  const [notifErrors, setNotifErrors] = useState({ title: false, body: false, recipients: false });
+  const [notifSuccess, setNotifSuccess] = useState('');
   const [notifMode, setNotifMode] = useState('all');
   const [notifTeacherIds, setNotifTeacherIds] = useState([]);
   const [notifTeacherSearch, setNotifTeacherSearch] = useState('');
@@ -263,7 +265,15 @@ export default function AdminDashboard() {
   };
 
   const handleSendNotification = async () => {
-    if (!notifTitle.trim() || !notifBody.trim()) return;
+    // validate
+    const errors = {
+      title: !notifTitle.trim(),
+      body: !notifBody.trim(),
+      recipients: notifMode === 'specific' && notifTeacherIds.length === 0,
+    };
+    setNotifErrors(errors);
+    if (errors.title || errors.body || errors.recipients) return;  // stop, show messages
+
     setNotifSending(true);
     try {
       await sendNotification({
@@ -272,10 +282,14 @@ export default function AdminDashboard() {
         teacher_ids: notifMode === 'specific' ? notifTeacherIds : null,
       });
       setSentNotifs(prev => [{ id: Date.now(), title: notifTitle, body: notifBody, created_at: new Date() }, ...prev]);
-      setNotifTitle('');
+      const count = notifMode === 'specific' ? notifTeacherIds.length : null;
+      setNotifTitle(''); setNotifBody('');
       setNotifMode('all'); setNotifTeacherIds([]);
-      setNotifBody('');
+      setNotifErrors({ title: false, body: false, recipients: false });
       setShowNotifForm(false);
+      // success toast (auto-clears)
+      setNotifSuccess(count !== null ? `✓ ההתראה נשלחה ל-${count} מורים` : '✓ ההתראה נשלחה לכל המורים');
+      setTimeout(() => setNotifSuccess(''), 4000);
     } catch (e) {
       console.error(e);
     } finally {
@@ -432,7 +446,7 @@ export default function AdminDashboard() {
           {activeTab === 'subjects' && <button style={styles.btnAdd} onClick={() => setModal('subject')}><i className="ti ti-plus" aria-hidden="true"></i> הוסף מקצוע</button>}
           {activeTab === 'groups' && <button style={styles.btnAdd} onClick={() => setModal('group')}><i className="ti ti-plus" aria-hidden="true"></i> הוסף קבוצה</button>}
           {activeTab === 'notifications' && (
-            <button style={styles.btnAdd} onClick={() => setShowNotifForm(true)}>
+            <button style={styles.btnAdd} onClick={() => { setNotifErrors({ title: false, body: false, recipients: false }); setShowNotifForm(true); }}>
               <i className="ti ti-plus" aria-hidden="true"></i> התראה חדשה
             </button>
           )}
@@ -950,11 +964,13 @@ export default function AdminDashboard() {
             </div>
             <div style={{ marginBottom: '16px' }}>
               <label style={styles.label}>כותרת</label>
-              <input style={styles.input} value={notifTitle} onChange={e => setNotifTitle(e.target.value)} placeholder="נושא ההתראה" />
+              <input style={{ ...styles.input, borderColor: notifErrors.title ? '#c0705a' : undefined, backgroundColor: notifErrors.title ? '#fff8f6' : undefined }} value={notifTitle} onChange={e => { setNotifTitle(e.target.value); if (notifErrors.title) setNotifErrors(p => ({ ...p, title: false })); }} placeholder="נושא ההתראה" />
+              {notifErrors.title && <div style={{ fontSize: '11px', color: '#c0705a', marginTop: '4px' }}>נא להזין כותרת</div>}
             </div>
             <div style={{ marginBottom: '24px' }}>
               <label style={styles.label}>תוכן ההודעה</label>
-              <textarea style={{ ...styles.input, height: '100px', resize: 'vertical' }} value={notifBody} onChange={e => setNotifBody(e.target.value)} placeholder="כתוב את ההודעה כאן..." />
+              <textarea style={{ ...styles.input, height: '100px', resize: 'vertical', borderColor: notifErrors.body ? '#c0705a' : undefined, backgroundColor: notifErrors.body ? '#fff8f6' : undefined }} value={notifBody} onChange={e => { setNotifBody(e.target.value); if (notifErrors.body) setNotifErrors(p => ({ ...p, body: false })); }} placeholder="כתוב את ההודעה כאן..." />
+              {notifErrors.body && <div style={{ fontSize: '11px', color: '#c0705a', marginTop: '4px' }}>נא להזין תוכן</div>}
             </div>
             <div style={{ marginBottom: '24px' }}>
               <label style={styles.label}>אל</label>
@@ -979,6 +995,13 @@ export default function AdminDashboard() {
                 </div>
               )}
             </div>
+            {notifErrors.recipients && (
+              <div style={{ fontSize: '12px', color: '#c0705a', backgroundColor: '#fff8f6', border: '1px solid #edc9bf', borderRadius: '8px', padding: '8px 12px', marginBottom: '12px', textAlign: 'center' }}>
+                נא לבחור לפחות מורה אחד
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowNotifForm(false)} style={styles.btnOutline}>ביטול</button>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               <button onClick={() => setShowNotifForm(false)} style={styles.btnOutline}>ביטול</button>
               <button onClick={handleSendNotification} style={styles.btnAdd} disabled={notifSending}>
