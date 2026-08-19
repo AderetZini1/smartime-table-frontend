@@ -300,10 +300,10 @@ export default function TeacherDashboard() {
     setReasonModal(null);
   };
 
-  const handleMarkRead = async (id) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-    markNotificationRead(id).catch(() => {
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: false } : n));
+  const handleMarkRead = async (notifId) => {
+    setNotifications(prev => prev.map(n => n.notification_id === notifId ? { ...n, is_read: true } : n));
+    markNotificationRead(notifId).catch(() => {
+      setNotifications(prev => prev.map(n => n.notification_id === notifId ? { ...n, is_read: false } : n));
     });
   };
   
@@ -495,7 +495,7 @@ export default function TeacherDashboard() {
                 </div>
                 <div style={{ fontSize: '13px', color: '#8a7a6e', marginBottom: n.is_read ? 0 : '10px', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{n.body}</div>
                 {!n.is_read && (
-                  <button onClick={() => handleMarkRead(n.id)} style={{ ...styles.btnOutline, fontSize: '12px', padding: '5px 12px' }}>
+                  <button onClick={() => handleMarkRead(n.notification_id)} style={{ ...styles.btnOutline, fontSize: '12px', padding: '5px 12px' }}>
                     <i className="ti ti-check" aria-hidden="true"></i> סמן כנקרא
                   </button>
                 )}
