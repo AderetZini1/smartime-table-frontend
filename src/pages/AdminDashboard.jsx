@@ -707,7 +707,7 @@ export default function AdminDashboard() {
                         onClick={() => { setExportFormat('excel'); setExportOpen(true); setExportDim(null); setExportSearch(''); }}
                         style={{ ...styles.viewBtn(false), display: 'flex', alignItems: 'center', gap: '6px' }}
                       >
-                        <i className="ti ti-file-spreadsheet" aria-hidden="true"></i> ייצוא לאקסל
+                        <i className="ti ti-file-spreadsheet" aria-hidden="true"></i> ייצוא ל-EXCEL
                       </button>
                       <button
                         onClick={() => { setExportFormat('pdf'); setExportOpen(true); setExportDim(null); setExportSearch(''); }}
