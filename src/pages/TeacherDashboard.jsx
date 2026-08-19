@@ -137,6 +137,8 @@ export default function TeacherDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile');
   const [notifications, setNotifications] = useState([]);
+  const [notifErrors, setNotifErrors] = useState({ title: false, body: false, recipients: false });
+  const [notifSuccess, setNotifSuccess] = useState('');
   const [constraints, setConstraints] = useState([]);
   const [activeWindow, setActiveWindow] = useState(null);
   const [windowLoaded, setWindowLoaded] = useState(false);
