@@ -299,6 +299,16 @@ export default function AdminDashboard() {
 
   const initials = (t) => `${t.first_name?.[0] || ''}${t.last_name?.[0] || ''}`;
 
+  const closeNotifForm = () => {
+    setNotifTitle('');
+    setNotifBody('');
+    setNotifMode('all');
+    setNotifTeacherIds([]);
+    setNotifTeacherSearch('');
+    setNotifErrors({ title: false, body: false, recipients: false });
+    setShowNotifForm(false);
+  };
+  
   const tileOptions = () => {
     const set = new Set();
     entries.forEach(e => {
