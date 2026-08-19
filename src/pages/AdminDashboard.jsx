@@ -125,7 +125,7 @@ export default function AdminDashboard() {
   const [publishMsg, setPublishMsg] = useState('');
   const [violations, setViolations] = useState(null);
   const [showViolations, setShowViolations] = useState(false);
-  const [filterType, setFilterType] = useState('class');
+  const [filterType, setFilterType] = useState(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportDim, setExportDim] = useState(null);   // null = main menu; else 'class'|'teacher'|'subject'|'grade'
   const [exportSearch, setExportSearch] = useState('');
@@ -326,7 +326,7 @@ export default function AdminDashboard() {
   const options = activeTab === 'schedule' ? tileOptions() : [];
 
   const selectView = (type) => {
-    setFilterType(type);
+    setFilterType(prev => prev === type ? null : type);  // click same → collapse
     setSelectedValues([]);
     setSearch('');
     setTilesExpanded(false);
@@ -764,7 +764,7 @@ export default function AdminDashboard() {
                       )}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', width: '100%', minWidth: 0 }}>
+                  {filterType && <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', width: '100%', minWidth: 0 }}>
                     <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                       <div style={{ display: 'flex', gap: '10px', overflowX: tilesExpanded ? 'visible' : 'auto', flexWrap: tilesExpanded ? 'wrap' : 'nowrap', paddingBottom: '8px' }}>
                         {options.length === 0 ? (
@@ -785,7 +785,7 @@ export default function AdminDashboard() {
                         <i className={`ti ${tilesExpanded ? 'ti-chevron-up' : 'ti-chevron-left'}`} aria-hidden="true"></i>
                       </button>
                     )}
-                  </div>
+                  </div>}
                 </div>
 
                 {selectedValues.length === 0 ? (
