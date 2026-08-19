@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { updateTeacher, getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule, getMyPreferences, saveMyPreferences, getMyNotifications, markNotificationRead } from '../services/api';
 import { exportSingleSchedule } from '../utils/exportSchedule';
 import { useNavigate } from 'react-router-dom';
+import { exportSinglePDF } from '../utils/exportSchedulePDF';
 
 const DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'];
 const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -390,6 +391,14 @@ export default function TeacherDashboard() {
     });
   };
 
+  const handleExportMyPDF = async () => {
+    await exportSinglePDF(myEntries, {
+      fileName: `מערכת_שעות_${user?.first_name || ''}_${user?.last_name || ''}`.trim(),
+      title: `מערכת השעות של ${user?.first_name || ''} ${user?.last_name || ''}`.trim(),
+      showGroup: true,
+    });
+  };
+
   const PriorityToggle = ({ label, field }) => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0', borderBottom: '1px solid #f0ebe3' }}>
       <span style={{ fontSize: '14px', color: '#4a3f35' }}>{label}</span>
@@ -759,6 +768,9 @@ export default function TeacherDashboard() {
               <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
                 <button onClick={handleExportMySchedule} style={{ ...styles.btnOutline, display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <i className="ti ti-file-spreadsheet" aria-hidden="true"></i> ייצוא לאקסל
+                </button>
+                <button onClick={handleExportMyPDF} style={{ ...styles.btnOutline, display: 'flex', alignItems: 'center', gap: '6px', marginRight: '8px' }}>
+                  <i className="ti ti-file-type-pdf" aria-hidden="true"></i> ייצוא ל-PDF
                 </button>
               </div>
             )}
