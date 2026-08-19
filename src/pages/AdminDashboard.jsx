@@ -819,6 +819,12 @@ export default function AdminDashboard() {
         )}
 
         {activeTab === 'notifications' && (
+          <>
+            {notifSuccess && (
+              <div style={{ backgroundColor: '#EDF4E8', color: '#4a7c3f', border: '1px solid #cfe3c4', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '14px', textAlign: 'center' }}>
+                {notifSuccess}
+              </div>
+            )}
           <div style={styles.card}>
             {sentNotifs.length === 0 ? (
               <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px', fontSize: '14px' }}>אין התראות עדיין</div>
@@ -830,6 +836,7 @@ export default function AdminDashboard() {
               </div>
             ))}
           </div>
+          </>
         )}
       </div>
       
