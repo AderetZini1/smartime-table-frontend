@@ -241,14 +241,25 @@ export default function TeacherDashboard() {
   }, [activeTab]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    let firstRun = true;
+    const check = () => {
       getMyRequests().then(r => {
         const answered = r.data.filter(req => req.status !== 'pending' && req.admin_response);
-        if (answered.length > prevAnsweredCount.current) setHasNewNotification(true);
-        prevAnsweredCount.current = answered.length;
+        if (firstRun) {
+          // establish the baseline without flagging existing answers as "new"
+          prevAnsweredCount.current = answered.length;
+          firstRun = false;
+        } else if (answered.length > prevAnsweredCount.current) {
+          setHasNewNotification(true);
+          prevAnsweredCount.current = answered.length;
+        } else {
+          prevAnsweredCount.current = answered.length;
+        }
         if (activeTab === 'requests') setRequests(r.data);
       }).catch(() => {});
-    }, 30000);
+    };
+    check();                             // run once immediately (sets baseline)
+    const interval = setInterval(check, 30000);
     return () => clearInterval(interval);
   }, [activeTab]);
 
