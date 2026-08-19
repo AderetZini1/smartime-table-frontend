@@ -8,6 +8,8 @@ import AddSubjectModal from '../components/AddSubjectModal';
 import AddGroupModal from '../components/AddGroupModal';
 import { exportSingleSchedule, exportMultiSchedule } from '../utils/exportSchedule';
 import { useNavigate } from 'react-router-dom';
+import { exportSinglePDF, exportMultiPDF } from '../utils/exportSchedulePDF';
+
 
 function fmtDate(iso) {
   if (!iso) return '';
@@ -127,6 +129,7 @@ export default function AdminDashboard() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exportDim, setExportDim] = useState(null);   // null = main menu; else 'class'|'teacher'|'subject'|'grade'
   const [exportSearch, setExportSearch] = useState('');
+  const [exportFormat, setExportFormat] = useState('excel');
   const [selectedValues, setSelectedValues] = useState([]);
   const [search, setSearch] = useState('');
   const [tilesExpanded, setTilesExpanded] = useState(false);
@@ -367,36 +370,44 @@ export default function AdminDashboard() {
   const closeExport = () => { setExportOpen(false); setExportDim(null); setExportSearch(''); };
 
   // Export ONE value (single sheet).
-  const exportOneValue = async (dim, val) => {
-    const showGroup = dim !== 'class';   // per-class sheets don't need the class repeated
-    await exportSingleSchedule(entriesForDim(dim, val), {
-      fileName: `מערכת_${DIM_LABEL[dim]}_${val}`,
-      sheetName: String(val),
-      showGroup,
-    });
+  const exportOneValue = async (dim, val, format = 'excel') => {
+    const showGroup = dim !== 'class';
+    const entries = entriesForDim(dim, val);
+    if (format === 'pdf') {
+      await exportSinglePDF(entries, { fileName: `מערכת_${DIM_LABEL[dim]}_${val}`, title: String(val), showGroup });
+    } else {
+      await exportSingleSchedule(entries, { fileName: `מערכת_${DIM_LABEL[dim]}_${val}`, sheetName: String(val), showGroup });
+    }
     closeExport();
   };
 
-  // Export ALL values of a dimension (one sheet/tab each).
-  const exportAllOfDim = async (dim) => {
+  const exportAllOfDim = async (dim, format = 'excel') => {
     const showGroup = dim !== 'class';
     const groups = valuesForDim(dim).map(val => ({ name: String(val), entries: entriesForDim(dim, val) }));
-    await exportMultiSchedule(groups, { fileName: `מערכות_לפי_${DIM_LABEL[dim]}`, showGroup });
+    if (format === 'pdf') {
+      await exportMultiPDF(groups, { fileName: `מערכות_לפי_${DIM_LABEL[dim]}`, showGroup });
+    } else {
+      await exportMultiSchedule(groups, { fileName: `מערכות_לפי_${DIM_LABEL[dim]}`, showGroup });
+    }
     closeExport();
   };
 
   // "Export what's open now" = all values of the CURRENT view (filterType).
-  const exportCurrent = async () => {
+  const exportCurrent = async (format = 'excel') => {
     if (selectedValues && selectedValues.length > 0) {
       if (selectedValues.length === 1) {
-        await exportOneValue(filterType, selectedValues[0]);
+        await exportOneValue(filterType, selectedValues[0], format);
       } else {
         const groups = selectedValues.map(val => ({ name: String(val), entries: entriesFor(val) }));
-        await exportMultiSchedule(groups, { fileName: 'מערכת_נבחרת', showGroup: filterType !== 'class' });
+        if (format === 'pdf') {
+          await exportMultiPDF(groups, { fileName: 'מערכת_נבחרת', showGroup: filterType !== 'class' });
+        } else {
+          await exportMultiSchedule(groups, { fileName: 'מערכת_נבחרת', showGroup: filterType !== 'class' });
+        }
         closeExport();
       }
     } else {
-      await exportAllOfDim(filterType);
+      await exportAllOfDim(filterType, format);
     }
   };
 
@@ -693,10 +704,16 @@ export default function AdminDashboard() {
                     <input style={{ ...styles.search, marginRight: 'auto' }} placeholder="חיפוש…" value={search} onChange={e => setSearch(e.target.value)} />
                     <div style={{ position: 'relative' }}>
                       <button
-                        onClick={() => { setExportOpen(o => !o); setExportDim(null); setExportSearch(''); }}
+                        onClick={() => { setExportFormat('excel'); setExportOpen(true); setExportDim(null); setExportSearch(''); }}
                         style={{ ...styles.viewBtn(false), display: 'flex', alignItems: 'center', gap: '6px' }}
                       >
                         <i className="ti ti-file-spreadsheet" aria-hidden="true"></i> ייצוא לאקסל
+                      </button>
+                      <button
+                        onClick={() => { setExportFormat('pdf'); setExportOpen(true); setExportDim(null); setExportSearch(''); }}
+                        style={{ ...styles.viewBtn(false), display: 'flex', alignItems: 'center', gap: '6px', marginRight: '8px' }}
+                      >
+                        <i className="ti ti-file-type-pdf" aria-hidden="true"></i> ייצוא ל-PDF
                       </button>
 
                       {exportOpen && (
@@ -707,7 +724,7 @@ export default function AdminDashboard() {
 
                             {exportDim === null ? (
                               <>
-                                <button onClick={exportCurrent} style={exportItemStyle(true)}>
+                                <button onClick={() => exportCurrent(exportFormat)} style={exportItemStyle(true)}>
                                   <i className="ti ti-eye" aria-hidden="true"></i> ייצא את מה שפתוח כרגע
                                 </button>
                                 <div style={{ height: '1px', backgroundColor: '#f0ebe3', margin: '6px 4px' }} />
@@ -723,7 +740,7 @@ export default function AdminDashboard() {
                                 <button onClick={() => setExportDim(null)} style={{ ...exportItemStyle(false), color: '#8a7a6e' }}>
                                   <i className="ti ti-chevron-right" aria-hidden="true"></i> חזרה
                                 </button>
-                                <button onClick={() => exportAllOfDim(exportDim)} style={exportItemStyle(true)}>
+                                <button onClick={() => exportAllOfDim(exportDim, exportFormat)} style={exportItemStyle(true)}>
                                   <i className="ti ti-stack-2" aria-hidden="true"></i> ייצא הכל (כל {DIM_LABEL[exportDim]})
                                 </button>
                                 <input
@@ -736,7 +753,7 @@ export default function AdminDashboard() {
                                 {valuesForDim(exportDim)
                                   .filter(v => String(v).includes(exportSearch.trim()))
                                   .map(v => (
-                                    <button key={v} onClick={() => exportOneValue(exportDim, v)} style={exportItemStyle(false)}>
+                                    <button key={v} onClick={() => exportOneValue(exportDim, v, exportFormat)} style={exportItemStyle(false)}>
                                       {exportDim === 'grade' ? `שכבת ${v}׳` : v}
                                     </button>
                                   ))}
