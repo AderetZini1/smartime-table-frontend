@@ -131,6 +131,7 @@ export default function AdminDashboard() {
   const [exportSearch, setExportSearch] = useState('');
   const [exportFormat, setExportFormat] = useState('excel');
   const [selectedValues, setSelectedValues] = useState([]);
+  const [exportMsg, setExportMsg] = useState('');
   const [search, setSearch] = useState('');
   const [tilesExpanded, setTilesExpanded] = useState(false);
 
@@ -367,7 +368,7 @@ export default function AdminDashboard() {
 
   const DIM_LABEL = { class: 'כיתה', teacher: 'מורה', subject: 'מקצוע', grade: 'שכבה' };
 
-  const closeExport = () => { setExportOpen(false); setExportDim(null); setExportSearch(''); };
+  const closeExport = () => { setExportOpen(false); setExportDim(null); setExportSearch(''); setExportMsg(''); };
 
   // Export ONE value (single sheet).
   const exportOneValue = async (dim, val, format = 'excel') => {
@@ -394,6 +395,11 @@ export default function AdminDashboard() {
 
   // "Export what's open now" = all values of the CURRENT view (filterType).
   const exportCurrent = async (format = 'excel') => {
+    if (!selectedValues || selectedValues.length === 0) {
+      setExportMsg('יש לבחור לפחות פריט אחד להצגה לפני הייצוא');
+      return;
+    }
+    setExportMsg('');
     if (selectedValues && selectedValues.length > 0) {
       if (selectedValues.length === 1) {
         await exportOneValue(filterType, selectedValues[0], format);
