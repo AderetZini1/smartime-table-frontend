@@ -973,11 +973,11 @@ export default function AdminDashboard() {
       )}
 
       {showNotifForm && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowNotifForm(false)}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeNotifForm}>
           <div style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1px solid #e2dacc', padding: '36px', width: '460px' }} onClick={e => e.stopPropagation()} dir="rtl">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
               <h2 style={{ fontSize: '18px', color: '#4a3f35', margin: 0 }}>שלח התראה חדשה</h2>
-              <button onClick={() => setShowNotifForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c8baa6', fontSize: '20px' }}>✕</button>
+              <button onClick={closeNotifForm} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c8baa6', fontSize: '20px' }}>✕</button>
             </div>
             <div style={{ marginBottom: '16px' }}>
               <label style={styles.label}>כותרת</label>
@@ -1018,7 +1018,7 @@ export default function AdminDashboard() {
               </div>
             )}
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowNotifForm(false)} style={styles.btnOutline}>ביטול</button>
+              <button onClick={closeNotifForm} style={styles.btnOutline}>ביטול</button>
               <button onClick={handleSendNotification} style={styles.btnAdd} disabled={notifSending}>
                 <i className="ti ti-send" aria-hidden="true"></i>
                 {notifSending ? 'שולח...' : (notifMode === 'specific' ? `שלח ל-${notifTeacherIds.length}` : 'שלח לכולם')}
