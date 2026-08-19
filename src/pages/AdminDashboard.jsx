@@ -1002,8 +1002,6 @@ export default function AdminDashboard() {
             )}
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               <button onClick={() => setShowNotifForm(false)} style={styles.btnOutline}>ביטול</button>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowNotifForm(false)} style={styles.btnOutline}>ביטול</button>
               <button onClick={handleSendNotification} style={styles.btnAdd} disabled={notifSending}>
                 <i className="ti ti-send" aria-hidden="true"></i>
                 {notifSending ? 'שולח...' : (notifMode === 'specific' ? `שלח ל-${notifTeacherIds.length}` : 'שלח לכולם')}
