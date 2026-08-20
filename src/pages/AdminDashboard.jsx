@@ -800,7 +800,11 @@ export default function AdminDashboard() {
                 </div>
       
                 {selectedValues.length === 0 ? (
-                  filterType && (
+                  !filterType ? (
+                    <div style={{ textAlign: 'center', color: '#c8baa6', padding: '12px', fontSize: '13px' }}>
+                      בחר/י תצוגה (כיתה / מורה / מקצוע / שכבה) כדי להתחיל.
+                    </div>
+                  ) : (
                     <div style={{ textAlign: 'center', color: '#c8baa6', padding: '12px', fontSize: '13px' }}>
                       בחר/י פריט אחד או יותר מהשורה למעלה כדי להציג מערכת שעות.
                     </div>
