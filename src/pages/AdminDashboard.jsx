@@ -800,9 +800,11 @@ export default function AdminDashboard() {
                 </div>
       
                 {selectedValues.length === 0 ? (
-                  <div style={{ ...styles.card, textAlign: 'center', color: '#c8baa6', padding: '40px' }}>
-                    בחר/י פריט אחד או יותר מהשורה למעלה כדי להציג מערכת שעות.
-                  </div>
+                  filterType && (
+                    <div style={{ textAlign: 'center', color: '#c8baa6', padding: '12px', fontSize: '13px' }}>
+                      בחר/י פריט אחד או יותר מהשורה למעלה כדי להציג מערכת שעות.
+                    </div>
+                  )
                 ) : (
                   selectedValues.map(val => {
                     const valEntries = entriesFor(val);
