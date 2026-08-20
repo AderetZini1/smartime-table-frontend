@@ -708,67 +708,6 @@ export default function AdminDashboard() {
                       <button key={v.id} onClick={() => selectView(v.id)} style={styles.viewBtn(filterType === v.id)}>{v.label}</button>
                     ))}
                     <input style={{ ...styles.search, marginRight: 'auto' }} placeholder="חיפוש…" value={search} onChange={e => setSearch(e.target.value)} />
-                    <div style={{ position: 'relative', display: 'flex', gap: '8px' }}>
-                      <button
-                        onClick={() => { setExportFormat('excel'); setExportOpen(true); setExportDim(null); setExportSearch(''); }}
-                        style={{ ...styles.viewBtn(false), display: 'flex', alignItems: 'center', gap: '6px' }}
-                      >
-                        <i className="ti ti-file-spreadsheet" aria-hidden="true"></i> ייצוא ל-EXCEL
-                      </button>
-                      <button
-                        onClick={() => { setExportFormat('pdf'); setExportOpen(true); setExportDim(null); setExportSearch(''); }}
-                        style={{ ...styles.viewBtn(false), display: 'flex', alignItems: 'center', gap: '6px', marginRight: '8px' }}
-                      >
-                        <i className="ti ti-file-type-pdf" aria-hidden="true"></i> ייצוא ל-PDF
-                      </button>
-
-                      {exportOpen && (
-                        <>
-                          {/* click-away backdrop */}
-                          <div onClick={closeExport} style={{ position: 'fixed', inset: 0, zIndex: 900 }} />
-                          <div dir="rtl" style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 901, backgroundColor: '#fff', border: '1px solid #e2dacc', borderRadius: '12px', boxShadow: '0 8px 24px rgba(74,63,53,0.14)', width: '260px', padding: '8px', maxHeight: '360px', overflowY: 'auto' }}>
-
-                            {exportDim === null ? (
-                              <>
-                                <button onClick={() => exportCurrent(exportFormat)} style={exportItemStyle(true)}>
-                                  <i className="ti ti-eye" aria-hidden="true"></i> ייצא את מה שפתוח כרגע
-                                </button>
-                                <div style={{ height: '1px', backgroundColor: '#f0ebe3', margin: '6px 4px' }} />
-                                {['class', 'teacher', 'subject', 'grade'].map(dim => (
-                                  <button key={dim} onClick={() => { setExportDim(dim); setExportSearch(''); }} style={exportItemStyle(false)}>
-                                    <span>ייצוא לפי {DIM_LABEL[dim]}</span>
-                                    <i className="ti ti-chevron-left" style={{ marginRight: 'auto' }} aria-hidden="true"></i>
-                                  </button>
-                                ))}
-                              </>
-                            ) : (
-                              <>
-                                <button onClick={() => setExportDim(null)} style={{ ...exportItemStyle(false), color: '#8a7a6e' }}>
-                                  <i className="ti ti-chevron-right" aria-hidden="true"></i> חזרה
-                                </button>
-                                <button onClick={() => exportAllOfDim(exportDim, exportFormat)} style={exportItemStyle(true)}>
-                                  <i className="ti ti-stack-2" aria-hidden="true"></i> ייצא הכל (כל {DIM_LABEL[exportDim]})
-                                </button>
-                                <input
-                                  autoFocus
-                                  value={exportSearch}
-                                  onChange={e => setExportSearch(e.target.value)}
-                                  placeholder={`חיפוש ${DIM_LABEL[exportDim]}…`}
-                                  style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', margin: '6px 0', border: '1px solid #e2dacc', borderRadius: '8px', fontSize: '13px', fontFamily: 'Varela Round, sans-serif', backgroundColor: '#FAF7F2' }}
-                                />
-                                {valuesForDim(exportDim)
-                                  .filter(v => String(v).includes(exportSearch.trim()))
-                                  .map(v => (
-                                    <button key={v} onClick={() => exportOneValue(exportDim, v, exportFormat)} style={exportItemStyle(false)}>
-                                      {exportDim === 'grade' ? `שכבת ${v}׳` : v}
-                                    </button>
-                                  ))}
-                              </>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </div>
                   </div>
                   {filterType && <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', width: '100%', minWidth: 0 }}>
                     <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
@@ -794,6 +733,72 @@ export default function AdminDashboard() {
                   </div>}
                 </div>
 
+                <div style={{ ...styles.card, display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
+                  <span style={{ fontSize: '13px', color: '#8a7a6e', marginLeft: '8px' }}>ייצוא:</span>
+                  <button
+                    onClick={() => { setExportFormat('excel'); setExportOpen(true); setExportDim(null); setExportSearch(''); setExportMsg(''); }}
+                    style={{ ...styles.viewBtn(false), display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <i className="ti ti-file-spreadsheet" aria-hidden="true"></i> ייצוא ל-EXCEL
+                  </button>
+                  <button
+                    onClick={() => { setExportFormat('pdf'); setExportOpen(true); setExportDim(null); setExportSearch(''); setExportMsg(''); }}
+                    style={{ ...styles.viewBtn(false), display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <i className="ti ti-file-type-pdf" aria-hidden="true"></i> ייצוא ל-PDF
+                  </button>
+
+                  {exportOpen && (
+                    <>
+                      <div onClick={closeExport} style={{ position: 'fixed', inset: 0, zIndex: 900 }} />
+                      <div dir="rtl" style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 901, backgroundColor: '#fff', border: '1px solid #e2dacc', borderRadius: '12px', boxShadow: '0 8px 24px rgba(74,63,53,0.14)', width: '280px', padding: '8px', maxHeight: '360px', overflowY: 'auto' }}>
+                        {exportMsg && (
+                          <div style={{ fontSize: '12px', color: '#c0705a', backgroundColor: '#fff8f6', border: '1px solid #edc9bf', borderRadius: '8px', padding: '8px 10px', marginBottom: '8px', textAlign: 'center' }}>
+                            {exportMsg}
+                          </div>
+                        )}
+                        {exportDim === null ? (
+                          <>
+                            <button onClick={() => exportCurrent(exportFormat)} style={exportItemStyle(true)}>
+                              <i className="ti ti-eye" aria-hidden="true"></i> ייצא את מה שפתוח כרגע
+                            </button>
+                            <div style={{ height: '1px', backgroundColor: '#f0ebe3', margin: '6px 4px' }} />
+                            {['class', 'teacher', 'subject', 'grade'].map(dim => (
+                              <button key={dim} onClick={() => { setExportDim(dim); setExportSearch(''); }} style={exportItemStyle(false)}>
+                                <span>ייצוא לפי {DIM_LABEL[dim]}</span>
+                                <i className="ti ti-chevron-left" style={{ marginRight: 'auto' }} aria-hidden="true"></i>
+                              </button>
+                            ))}
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => setExportDim(null)} style={{ ...exportItemStyle(false), color: '#8a7a6e' }}>
+                              <i className="ti ti-chevron-right" aria-hidden="true"></i> חזרה
+                            </button>
+                            <button onClick={() => exportAllOfDim(exportDim, exportFormat)} style={exportItemStyle(true)}>
+                              <i className="ti ti-stack-2" aria-hidden="true"></i> ייצא הכל (כל {DIM_LABEL[exportDim]})
+                            </button>
+                            <input
+                              autoFocus
+                              value={exportSearch}
+                              onChange={e => setExportSearch(e.target.value)}
+                              placeholder={`חיפוש ${DIM_LABEL[exportDim]}…`}
+                              style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', margin: '6px 0', border: '1px solid #e2dacc', borderRadius: '8px', fontSize: '13px', fontFamily: 'Varela Round, sans-serif', backgroundColor: '#FAF7F2' }}
+                            />
+                            {valuesForDim(exportDim)
+                              .filter(v => String(v).includes(exportSearch.trim()))
+                              .map(v => (
+                                <button key={v} onClick={() => exportOneValue(exportDim, v, exportFormat)} style={exportItemStyle(false)}>
+                                  {exportDim === 'grade' ? `שכבת ${v}׳` : v}
+                                </button>
+                              ))}
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+      
                 {selectedValues.length === 0 ? (
                   <div style={{ ...styles.card, textAlign: 'center', color: '#c8baa6', padding: '40px' }}>
                     בחר/י פריט אחד או יותר מהשורה למעלה כדי להציג מערכת שעות.
