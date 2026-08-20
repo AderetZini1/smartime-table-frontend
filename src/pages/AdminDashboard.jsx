@@ -396,7 +396,7 @@ export default function AdminDashboard() {
   // "Export what's open now" = all values of the CURRENT view (filterType).
   const exportCurrent = async (format = 'excel') => {
     if (!selectedValues || selectedValues.length === 0) {
-      setExportMsg('יש לבחור לפחות פריט אחד להצגה לפני הייצוא');
+      setExportMsg('אין פריט שפתוח כרגע');
       return;
     }
     setExportMsg('');
