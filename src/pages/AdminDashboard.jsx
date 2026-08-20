@@ -702,37 +702,6 @@ export default function AdminDashboard() {
               </div>
             ) : (
               <>
-                <div style={{ ...styles.card, display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                    {VIEW_TYPES.map(v => (
-                      <button key={v.id} onClick={() => selectView(v.id)} style={styles.viewBtn(filterType === v.id)}>{v.label}</button>
-                    ))}
-                    <input style={{ ...styles.search, marginRight: 'auto' }} placeholder="חיפוש…" value={search} onChange={e => setSearch(e.target.value)} />
-                  </div>
-                  {filterType && <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', width: '100%', minWidth: 0 }}>
-                    <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                      <div style={{ display: 'flex', gap: '10px', overflowX: tilesExpanded ? 'visible' : 'auto', flexWrap: tilesExpanded ? 'wrap' : 'nowrap', paddingBottom: '8px' }}>
-                        {options.length === 0 ? (
-                          <div style={{ color: '#c8baa6', fontSize: '13px', padding: '8px' }}>לא נמצאו תוצאות</div>
-                        ) : options.map(o => {
-                          const active = selectedValues.includes(o);
-                          return (
-                            <button key={o} onClick={() => toggleValue(o)} style={styles.tile(active)}>
-                              <i className="ti ti-calendar-event" style={{ fontSize: '15px', color: active ? '#6b8f5e' : '#c8baa6' }} aria-hidden="true"></i>
-                              {tileLabel(o)}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    {options.length > 0 && (
-                      <button style={styles.arrowBtn} title={tilesExpanded ? 'צמצם' : 'הצג הכל'} onClick={() => setTilesExpanded(v => !v)}>
-                        <i className={`ti ${tilesExpanded ? 'ti-chevron-up' : 'ti-chevron-left'}`} aria-hidden="true"></i>
-                      </button>
-                    )}
-                  </div>}
-                </div>
-
                 <div style={{ ...styles.card, display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
                   <span style={{ fontSize: '13px', color: '#8a7a6e', marginLeft: '8px' }}>ייצוא:</span>
                   <button
@@ -797,6 +766,37 @@ export default function AdminDashboard() {
                       </div>
                     </>
                   )}
+                </div>
+                
+                <div style={{ ...styles.card, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    {VIEW_TYPES.map(v => (
+                      <button key={v.id} onClick={() => selectView(v.id)} style={styles.viewBtn(filterType === v.id)}>{v.label}</button>
+                    ))}
+                    <input style={{ ...styles.search, marginRight: 'auto' }} placeholder="חיפוש…" value={search} onChange={e => setSearch(e.target.value)} />
+                  </div>
+                  {filterType && <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', width: '100%', minWidth: 0 }}>
+                    <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', gap: '10px', overflowX: tilesExpanded ? 'visible' : 'auto', flexWrap: tilesExpanded ? 'wrap' : 'nowrap', paddingBottom: '8px' }}>
+                        {options.length === 0 ? (
+                          <div style={{ color: '#c8baa6', fontSize: '13px', padding: '8px' }}>לא נמצאו תוצאות</div>
+                        ) : options.map(o => {
+                          const active = selectedValues.includes(o);
+                          return (
+                            <button key={o} onClick={() => toggleValue(o)} style={styles.tile(active)}>
+                              <i className="ti ti-calendar-event" style={{ fontSize: '15px', color: active ? '#6b8f5e' : '#c8baa6' }} aria-hidden="true"></i>
+                              {tileLabel(o)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {options.length > 0 && (
+                      <button style={styles.arrowBtn} title={tilesExpanded ? 'צמצם' : 'הצג הכל'} onClick={() => setTilesExpanded(v => !v)}>
+                        <i className={`ti ${tilesExpanded ? 'ti-chevron-up' : 'ti-chevron-left'}`} aria-hidden="true"></i>
+                      </button>
+                    )}
+                  </div>}
                 </div>
       
                 {selectedValues.length === 0 ? (
