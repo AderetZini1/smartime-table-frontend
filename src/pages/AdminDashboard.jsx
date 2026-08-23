@@ -701,15 +701,20 @@ export default function AdminDashboard() {
                           <div style={{ fontSize: '13px', color: '#c8baa6' }}>אין אילוצי זמינות</div>
                         ) : (
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                            {prefData.constraints.map(c => {
-                              const dayNames = { 1: 'ראשון', 2: 'שני', 3: 'שלישי', 4: 'רביעי', 5: 'חמישי', 6: 'שישי' };
-                              const hard = c.constraint_type === 'hard';
-                              return (
-                                <span key={c.id} style={{ padding: '5px 12px', borderRadius: '8px', fontSize: '12px', backgroundColor: hard ? '#FAE8E8' : '#FFF3A3', color: hard ? '#c0705a' : '#a08c30' }}>
-                                  {dayNames[c.day_of_week] || c.day_of_week} · שעה {c.hour_of_day} · {hard ? 'לא יכול' : 'מעדיף שלא'}
-                                </span>
-                              );
-                            })}
+                            {prefData.constraints
+                              .slice()
+                              .sort((a, b) => a.timeslot_id - b.timeslot_id)
+                              .map(c => {
+                                const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'];
+                                const dayIdx = Math.floor((c.timeslot_id - 1) / 8);   // 0..5
+                                const hour = ((c.timeslot_id - 1) % 8) + 1;           // 1..8
+                                const hard = c.constraint_type === 'hard';
+                                return (
+                                  <span key={c.id} style={{ padding: '5px 12px', borderRadius: '8px', fontSize: '12px', backgroundColor: hard ? '#FAE8E8' : '#FFF3A3', color: hard ? '#c0705a' : '#a08c30' }}>
+                                    יום {dayNames[dayIdx]} · שעה {hour} · {hard ? 'לא יכול' : 'מעדיף שלא'}
+                                  </span>
+                                );
+                              })}
                           </div>
                         )}
                       </div>
