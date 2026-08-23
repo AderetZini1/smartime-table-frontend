@@ -148,7 +148,10 @@ export default function AdminDashboard() {
     if (activeTab === 'schedule') { getStudentGroups().then(r => setGroups(r.data)); loadSchedule(); }
     if (activeTab === 'requests') getMyRequests().then(r => { setRequests(r.data); setPendingCount(r.data.filter(x => x.status === 'pending').length); });
     if (activeTab === 'windows') getSubmissionWindows().then(r => setWindows(r.data));
-    if (activeTab === 'teacherprefs') getTeachers().then(r => setTeachers(r.data)).catch(() => {});
+    if (activeTab === 'teacherprefs') {
+      getTeachers().then(r => setTeachers(r.data)).catch(() => {});
+      getSubjects().then(r => setSubjects(r.data)).catch(() => {});
+    }
     if (activeTab === 'notifications') {
       getNotifications().then(r => setSentNotifs(r.data)).catch(() => {});
       getTeachers().then(r => setTeachers(r.data)).catch(() => {});
@@ -497,7 +500,108 @@ export default function AdminDashboard() {
           {activeTab === 'rooms' && <button style={styles.btnAdd} onClick={() => setModal('room')}><i className="ti ti-plus" aria-hidden="true"></i> הוסף חדר</button>}
           {activeTab === 'subjects' && <button style={styles.btnAdd} onClick={() => setModal('subject')}><i className="ti ti-plus" aria-hidden="true"></i> הוסף מקצוע</button>}
           {activeTab === 'groups' && <button style={styles.btnAdd} onClick={() => setModal('group')}><i className="ti ti-plus" aria-hidden="true"></i> הוסף קבוצה</button>}
-          {activeTab === 'teacherprefs' && (
+          
+          {activeTab === 'notifications' && (
+            <button style={styles.btnAdd} onClick={() => { setNotifErrors({ title: false, body: false, recipients: false }); setShowNotifForm(true); }}>
+              <i className="ti ti-plus" aria-hidden="true"></i> התראה חדשה
+            </button>
+          )}
+        </div>
+
+        {activeTab === 'requests' && (
+          <div style={styles.card}>
+            {requests.length === 0 ? (
+              <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px', fontSize: '14px' }}>אין פניות עדיין</div>
+            ) : requests.map((req, i) => (
+              <div key={req.id} style={{ padding: '16px 0', borderBottom: i < requests.length - 1 ? '1px solid #f0ebe3' : 'none' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                  <div>
+                    <div style={{ fontSize: '14px', color: '#4a3f35', marginBottom: '4px' }}>
+                      {REQUEST_TYPES[req.request_type] || req.request_type}
+                      <span style={{ fontSize: '12px', color: '#c8baa6', marginRight: '8px' }}>
+                        {teachers.find(t => t.id === req.teacher_id)?.first_name} {teachers.find(t => t.id === req.teacher_id)?.last_name}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#8a7a6e' }}>{req.description}</div>
+                    {req.admin_response && (
+                      <div style={{ fontSize: '12px', color: '#6b8f5e', backgroundColor: '#EDF4E8', borderRadius: '6px', padding: '6px 10px', marginTop: '8px' }}>
+                        תשובה: {req.admin_response}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                    <span style={{ fontSize: '12px', color: statusColor(req.status), backgroundColor: `${statusColor(req.status)}20`, padding: '3px 10px', borderRadius: '20px' }}>
+                      {statusLabel(req.status)}
+                    </span>
+                    {req.status === 'pending' && (
+                      <button onClick={() => { setRespondModal(req); setResponse({ status: 'approved', admin_response: '' }); }} style={styles.btnAdd}>טפל</button>
+                    )}
+                  </div>
+                </div>
+                <div style={{ fontSize: '11px', color: '#c8baa6' }}>{new Date(req.created_at).toLocaleDateString('he-IL')}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'windows' && (
+          <>
+            <div style={styles.card}>
+              <h3 style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '16px' }}>פתח חלון הגשה חדש</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                <div>
+                  <label style={styles.label}>כותרת</label>
+                  <input style={styles.input} value={newWindow.title} onChange={e => setNewWindow({ ...newWindow, title: e.target.value })} placeholder='העדפות מחצית א׳' />
+                </div>
+                <div>
+                  <label style={styles.label}>תאריך פתיחה</label>
+                  <input type="datetime-local" style={styles.input} value={newWindow.start_date} onChange={e => setNewWindow({ ...newWindow, start_date: e.target.value })} />
+                </div>
+                <div>
+                  <label style={styles.label}>תאריך סגירה</label>
+                  <input type="datetime-local" style={styles.input} value={newWindow.end_date} onChange={e => setNewWindow({ ...newWindow, end_date: e.target.value })} />
+                </div>
+              </div>
+              <button onClick={handleCreateWindow} style={styles.btnAdd}>
+                <i className="ti ti-plus" aria-hidden="true"></i> צור חלון
+              </button>
+            </div>
+            <div style={styles.card}>
+              <div style={styles.tableHeader}>
+                <div style={{ flex: 3 }}>כותרת</div>
+                <div style={{ flex: 2 }}>פתיחה</div>
+                <div style={{ flex: 2 }}>סגירה</div>
+                <div style={{ flex: 1 }}>סטטוס</div>
+                <div style={{ width: '40px' }}></div>
+              </div>
+              {windows.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#c8baa6', padding: '24px', fontSize: '14px' }}>אין חלונות הגשה</div>
+              ) : windows.map((w, i) => {
+                const now = new Date();
+                const start = new Date(w.start_date);
+                const end = new Date(w.end_date);
+                const isActive = start <= now && end >= now && w.is_active;
+                return (
+                  <div key={w.id} style={{ ...styles.tableRow, borderBottom: i < windows.length - 1 ? '1px solid #f0ebe3' : 'none' }}>
+                    <div style={{ flex: 3 }}>{w.title}</div>
+                    <div style={{ flex: 2, color: '#8a7a6e' }}>{new Date(w.start_date).toLocaleString('he-IL')}</div>
+                    <div style={{ flex: 2, color: '#8a7a6e' }}>{new Date(w.end_date).toLocaleString('he-IL')}</div>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '20px', backgroundColor: isActive ? '#EDF4E8' : '#f0ebe3', color: isActive ? '#6b8f5e' : '#c8baa6' }}>
+                        {isActive ? 'פעיל' : 'לא פעיל'}
+                      </span>
+                    </div>
+                    <div style={{ width: '40px' }}>
+                      <i className="ti ti-trash" onClick={() => setConfirmModal({ type: 'window', id: w.id, name: w.title })} style={styles.iconBtn} aria-hidden="true"></i>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {activeTab === 'teacherprefs' && (
             <div style={styles.card}>
               {!prefTeacher ? (
                 <>
@@ -616,106 +720,7 @@ export default function AdminDashboard() {
               )}
             </div>
           )}
-          {activeTab === 'notifications' && (
-            <button style={styles.btnAdd} onClick={() => { setNotifErrors({ title: false, body: false, recipients: false }); setShowNotifForm(true); }}>
-              <i className="ti ti-plus" aria-hidden="true"></i> התראה חדשה
-            </button>
-          )}
-        </div>
-
-        {activeTab === 'requests' && (
-          <div style={styles.card}>
-            {requests.length === 0 ? (
-              <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px', fontSize: '14px' }}>אין פניות עדיין</div>
-            ) : requests.map((req, i) => (
-              <div key={req.id} style={{ padding: '16px 0', borderBottom: i < requests.length - 1 ? '1px solid #f0ebe3' : 'none' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                  <div>
-                    <div style={{ fontSize: '14px', color: '#4a3f35', marginBottom: '4px' }}>
-                      {REQUEST_TYPES[req.request_type] || req.request_type}
-                      <span style={{ fontSize: '12px', color: '#c8baa6', marginRight: '8px' }}>
-                        {teachers.find(t => t.id === req.teacher_id)?.first_name} {teachers.find(t => t.id === req.teacher_id)?.last_name}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: '13px', color: '#8a7a6e' }}>{req.description}</div>
-                    {req.admin_response && (
-                      <div style={{ fontSize: '12px', color: '#6b8f5e', backgroundColor: '#EDF4E8', borderRadius: '6px', padding: '6px 10px', marginTop: '8px' }}>
-                        תשובה: {req.admin_response}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-                    <span style={{ fontSize: '12px', color: statusColor(req.status), backgroundColor: `${statusColor(req.status)}20`, padding: '3px 10px', borderRadius: '20px' }}>
-                      {statusLabel(req.status)}
-                    </span>
-                    {req.status === 'pending' && (
-                      <button onClick={() => { setRespondModal(req); setResponse({ status: 'approved', admin_response: '' }); }} style={styles.btnAdd}>טפל</button>
-                    )}
-                  </div>
-                </div>
-                <div style={{ fontSize: '11px', color: '#c8baa6' }}>{new Date(req.created_at).toLocaleDateString('he-IL')}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {activeTab === 'windows' && (
-          <>
-            <div style={styles.card}>
-              <h3 style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '16px' }}>פתח חלון הגשה חדש</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                <div>
-                  <label style={styles.label}>כותרת</label>
-                  <input style={styles.input} value={newWindow.title} onChange={e => setNewWindow({ ...newWindow, title: e.target.value })} placeholder='העדפות מחצית א׳' />
-                </div>
-                <div>
-                  <label style={styles.label}>תאריך פתיחה</label>
-                  <input type="datetime-local" style={styles.input} value={newWindow.start_date} onChange={e => setNewWindow({ ...newWindow, start_date: e.target.value })} />
-                </div>
-                <div>
-                  <label style={styles.label}>תאריך סגירה</label>
-                  <input type="datetime-local" style={styles.input} value={newWindow.end_date} onChange={e => setNewWindow({ ...newWindow, end_date: e.target.value })} />
-                </div>
-              </div>
-              <button onClick={handleCreateWindow} style={styles.btnAdd}>
-                <i className="ti ti-plus" aria-hidden="true"></i> צור חלון
-              </button>
-            </div>
-            <div style={styles.card}>
-              <div style={styles.tableHeader}>
-                <div style={{ flex: 3 }}>כותרת</div>
-                <div style={{ flex: 2 }}>פתיחה</div>
-                <div style={{ flex: 2 }}>סגירה</div>
-                <div style={{ flex: 1 }}>סטטוס</div>
-                <div style={{ width: '40px' }}></div>
-              </div>
-              {windows.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#c8baa6', padding: '24px', fontSize: '14px' }}>אין חלונות הגשה</div>
-              ) : windows.map((w, i) => {
-                const now = new Date();
-                const start = new Date(w.start_date);
-                const end = new Date(w.end_date);
-                const isActive = start <= now && end >= now && w.is_active;
-                return (
-                  <div key={w.id} style={{ ...styles.tableRow, borderBottom: i < windows.length - 1 ? '1px solid #f0ebe3' : 'none' }}>
-                    <div style={{ flex: 3 }}>{w.title}</div>
-                    <div style={{ flex: 2, color: '#8a7a6e' }}>{new Date(w.start_date).toLocaleString('he-IL')}</div>
-                    <div style={{ flex: 2, color: '#8a7a6e' }}>{new Date(w.end_date).toLocaleString('he-IL')}</div>
-                    <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '20px', backgroundColor: isActive ? '#EDF4E8' : '#f0ebe3', color: isActive ? '#6b8f5e' : '#c8baa6' }}>
-                        {isActive ? 'פעיל' : 'לא פעיל'}
-                      </span>
-                    </div>
-                    <div style={{ width: '40px' }}>
-                      <i className="ti ti-trash" onClick={() => setConfirmModal({ type: 'window', id: w.id, name: w.title })} style={styles.iconBtn} aria-hidden="true"></i>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        )}
-
+        
         {activeTab === 'teachers' && (
           <div style={styles.card}>
             <div style={styles.tableHeader}>
