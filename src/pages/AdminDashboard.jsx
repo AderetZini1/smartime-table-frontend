@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher } from '../services/api';
+import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher, getMyConstraints, getTeacherPreferencesById, getTeacherSubjectsById, getTeacherGradeLevelsById, getTeacherHomeroomById } from '../services/api';
 import AddTeacherModal from '../components/AddTeacherModal';
 import EditModal from '../components/EditModal';
 import AddRoomModal from '../components/AddRoomModal';
@@ -23,6 +23,7 @@ function fmtDate(iso) {
 const TABS = [
   { id: 'schedule', label: 'מערכת שעות', icon: 'ti-calendar' },
   { id: 'requests', label: 'פניות מורים', icon: 'ti-message' },
+  { id: 'teacherprefs', label: 'העדפות מורים', icon: 'ti-clipboard-text' },
   { id: 'windows', label: 'חלונות הגשה', icon: 'ti-calendar-event' },
   { id: 'notifications', label: 'התראות', icon: 'ti-bell' },
   { id: 'teachers', label: 'מורים', icon: 'ti-users' },
@@ -134,6 +135,10 @@ export default function AdminDashboard() {
   const [exportMsg, setExportMsg] = useState('');
   const [search, setSearch] = useState('');
   const [tilesExpanded, setTilesExpanded] = useState(false);
+  const [prefTeacher, setPrefTeacher] = useState(null);
+  const [prefData, setPrefData] = useState(null);
+  const [prefLoading, setPrefLoading] = useState(false);
+  const [prefSearch, setPrefSearch] = useState('');
 
   useEffect(() => {
     getTeachers().then(r => setTeachers(r.data));
@@ -143,10 +148,12 @@ export default function AdminDashboard() {
     if (activeTab === 'schedule') { getStudentGroups().then(r => setGroups(r.data)); loadSchedule(); }
     if (activeTab === 'requests') getMyRequests().then(r => { setRequests(r.data); setPendingCount(r.data.filter(x => x.status === 'pending').length); });
     if (activeTab === 'windows') getSubmissionWindows().then(r => setWindows(r.data));
+    if (activeTab === 'teacherprefs') getTeachers().then(r => setTeachers(r.data)).catch(() => {});
     if (activeTab === 'notifications') {
       getNotifications().then(r => setSentNotifs(r.data)).catch(() => {});
       getTeachers().then(r => setTeachers(r.data)).catch(() => {});
     }
+    
     
   }, [activeTab]);
 
@@ -214,7 +221,7 @@ export default function AdminDashboard() {
       }
     }
   };
-
+  
   const handlePublish = async () => {
     setPublishing(true);
     setPublishMsg('');
@@ -227,6 +234,24 @@ export default function AdminDashboard() {
       setPublishMsg('שגיאה בפרסום');
     } finally {
       setPublishing(false);
+    }
+  };
+
+  const openTeacherPrefs = async (teacher) => {
+    setPrefTeacher(teacher);
+    setPrefLoading(true);
+    setPrefData(null);
+    try {
+      const [prefs, subjects, grades, homeroom, allCon] = await Promise.all([
+        getTeacherPreferencesById(teacher.id).then(r => r.data).catch(() => null),
+        getTeacherSubjectsById(teacher.id).then(r => r.data).catch(() => []),
+        getTeacherGradeLevelsById(teacher.id).then(r => r.data).catch(() => []),
+        getTeacherHomeroomById(teacher.id).then(r => r.data).catch(() => ({})),
+        getMyConstraints().then(r => r.data.filter(c => c.teacher_id === teacher.id)).catch(() => []),
+      ]);
+      setPrefData({ prefs, subjects, grades, homeroom, constraints: allCon });
+    } finally {
+      setPrefLoading(false);
     }
   };
 
@@ -427,7 +452,7 @@ export default function AdminDashboard() {
           <div style={styles.brandName}>פאנל ניהול</div>
         </div>
         <nav style={{ flex: 1 }}>
-          {['schedule', 'requests', 'windows', 'notifications'].map(id => {
+          {['schedule', 'requests', 'teacherprefs', 'windows', 'notifications'].map(id => {
             const tab = TABS.find(t => t.id === id);
             return (
               <button key={id} onClick={() => setActiveTab(id)} style={styles.navItem(activeTab === id)}>
@@ -472,6 +497,125 @@ export default function AdminDashboard() {
           {activeTab === 'rooms' && <button style={styles.btnAdd} onClick={() => setModal('room')}><i className="ti ti-plus" aria-hidden="true"></i> הוסף חדר</button>}
           {activeTab === 'subjects' && <button style={styles.btnAdd} onClick={() => setModal('subject')}><i className="ti ti-plus" aria-hidden="true"></i> הוסף מקצוע</button>}
           {activeTab === 'groups' && <button style={styles.btnAdd} onClick={() => setModal('group')}><i className="ti ti-plus" aria-hidden="true"></i> הוסף קבוצה</button>}
+          {activeTab === 'teacherprefs' && (
+            <div style={styles.card}>
+              {!prefTeacher ? (
+                <>
+                  <input
+                    value={prefSearch}
+                    onChange={e => setPrefSearch(e.target.value)}
+                    placeholder="חיפוש מורה…"
+                    style={{ ...styles.input, marginBottom: '16px' }}
+                  />
+                  {teachers.filter(t => !t.is_admin && `${t.first_name} ${t.last_name}`.includes(prefSearch.trim())).map((t, i, arr) => (
+                    <div
+                      key={t.id}
+                      onClick={() => openTeacherPrefs(t)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 8px', borderBottom: i < arr.length - 1 ? '1px solid #f0ebe3' : 'none', cursor: 'pointer' }}
+                    >
+                      <div style={styles.avatar}>{initials(t)}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '15px', color: '#4a3f35' }}>{t.first_name} {t.last_name}</div>
+                        <div style={{ fontSize: '12px', color: '#8a7a6e' }}>{t.email}</div>
+                      </div>
+                      <i className="ti ti-chevron-left" style={{ color: '#c8baa6' }} aria-hidden="true"></i>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+                    <button onClick={() => { setPrefTeacher(null); setPrefData(null); }} style={{ ...styles.btnOutline, fontSize: '13px', padding: '6px 12px' }}>
+                      <i className="ti ti-chevron-right" aria-hidden="true"></i> חזרה לרשימה
+                    </button>
+                    <h3 style={{ fontSize: '17px', color: '#4a3f35', margin: 0 }}>העדפות של {prefTeacher.first_name} {prefTeacher.last_name}</h3>
+                  </div>
+  
+                  {prefLoading ? (
+                    <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px' }}>טוען…</div>
+                  ) : !prefData ? (
+                    <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px' }}>לא נמצאו נתונים</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+  
+                      {/* Subjects */}
+                      <div>
+                        <div style={{ fontSize: '14px', color: '#4a3f35', fontWeight: 600, marginBottom: '8px' }}>מקצועות שהמורה מלמד/ת</div>
+                        {prefData.subjects.length === 0 ? (
+                          <div style={{ fontSize: '13px', color: '#c8baa6' }}>לא נבחרו מקצועות</div>
+                        ) : (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                            {prefData.subjects.map(s => {
+                              const subj = subjects.find(x => x.id === s.subject_id);
+                              return <span key={s.subject_id} style={{ padding: '5px 12px', borderRadius: '20px', backgroundColor: '#EDF4E8', color: '#4a7c3f', fontSize: '13px' }}>{subj ? subj.subject_name : `#${s.subject_id}`}</span>;
+                            })}
+                          </div>
+                        )}
+                      </div>
+  
+                      {/* Grade levels */}
+                      <div>
+                        <div style={{ fontSize: '14px', color: '#4a3f35', fontWeight: 600, marginBottom: '8px' }}>שכבות מועדפות</div>
+                        {prefData.grades.length === 0 ? (
+                          <div style={{ fontSize: '13px', color: '#c8baa6' }}>לא נבחרו שכבות</div>
+                        ) : (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                            {prefData.grades.map(g => <span key={g.grade_level} style={{ padding: '5px 12px', borderRadius: '20px', backgroundColor: '#EDF4E8', color: '#4a7c3f', fontSize: '13px' }}>שכבה {g.grade_level}</span>)}
+                          </div>
+                        )}
+                      </div>
+  
+                      {/* Homeroom */}
+                      <div>
+                        <div style={{ fontSize: '14px', color: '#4a3f35', fontWeight: 600, marginBottom: '8px' }}>חינוך כיתה</div>
+                        <div style={{ fontSize: '13px', color: '#8a7a6e' }}>
+                          {prefData.homeroom && prefData.homeroom.wants_homeroom
+                            ? 'המורה מעוניין/ת בחינוך כיתה'
+                            : 'המורה לא ביקש/ה חינוך כיתה'}
+                        </div>
+                      </div>
+  
+                      {/* Priority preferences */}
+                      <div>
+                        <div style={{ fontSize: '14px', color: '#4a3f35', fontWeight: 600, marginBottom: '8px' }}>העדפות שיבוץ</div>
+                        {!prefData.prefs ? (
+                          <div style={{ fontSize: '13px', color: '#c8baa6' }}>לא הוגדרו העדפות</div>
+                        ) : (
+                          <div style={{ fontSize: '13px', color: '#8a7a6e', lineHeight: 1.8 }}>
+                            <div>סיום מוקדם: {prefData.prefs.priority_early_finish ? 'מועדף' : 'ללא'}</div>
+                            <div>ללא חלונות: {prefData.prefs.priority_no_gaps ? 'מועדף' : 'ללא'}</div>
+                            <div>יום חופשי: {prefData.prefs.priority_free_day ? 'מועדף' : 'ללא'}</div>
+                            <div>שעות: {prefData.prefs.min_hours}–{prefData.prefs.max_hours}</div>
+                          </div>
+                        )}
+                      </div>
+  
+                      {/* Availability constraints */}
+                      <div>
+                        <div style={{ fontSize: '14px', color: '#4a3f35', fontWeight: 600, marginBottom: '8px' }}>אילוצי זמינות</div>
+                        {prefData.constraints.length === 0 ? (
+                          <div style={{ fontSize: '13px', color: '#c8baa6' }}>אין אילוצי זמינות</div>
+                        ) : (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                            {prefData.constraints.map(c => {
+                              const dayNames = { 1: 'ראשון', 2: 'שני', 3: 'שלישי', 4: 'רביעי', 5: 'חמישי', 6: 'שישי' };
+                              const hard = c.constraint_type === 'hard';
+                              return (
+                                <span key={c.id} style={{ padding: '5px 12px', borderRadius: '8px', fontSize: '12px', backgroundColor: hard ? '#FAE8E8' : '#FFF3A3', color: hard ? '#c0705a' : '#a08c30' }}>
+                                  {dayNames[c.day_of_week] || c.day_of_week} · שעה {c.hour_of_day} · {hard ? 'לא יכול' : 'מעדיף שלא'}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+  
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
           {activeTab === 'notifications' && (
             <button style={styles.btnAdd} onClick={() => { setNotifErrors({ title: false, body: false, recipients: false }); setShowNotifForm(true); }}>
               <i className="ti ti-plus" aria-hidden="true"></i> התראה חדשה
