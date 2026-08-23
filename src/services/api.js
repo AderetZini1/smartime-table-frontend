@@ -72,6 +72,12 @@ export const saveMyHomeroomPref = (data) => api.post('/teacher-homeroom-prefs/me
 export const getMyPreferences = () => api.get('/teacher-preferences/me');
 export const saveMyPreferences = (data) => api.post('/teacher-preferences/me', data);
 
+// Admin: read a SPECIFIC teacher's preferences (by teacher id)
+export const getTeacherPreferencesById = (id) => api.get(`/teacher-preferences/for-teacher/${id}`);
+export const getTeacherSubjectsById = (id) => api.get(`/teacher-subjects/for-teacher/${id}`);
+export const getTeacherGradeLevelsById = (id) => api.get(`/teacher-grade-levels/for-teacher/${id}`);
+export const getTeacherHomeroomById = (id) => api.get(`/teacher-homeroom-prefs/for-teacher/${id}`);
+
 export const getViolations = () => api2.get('/schedule/violations');
 
 // ========================================================================
