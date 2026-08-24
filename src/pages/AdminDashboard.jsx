@@ -645,9 +645,8 @@ export default function AdminDashboard() {
                     </button>
                   </div>
                   <div style={{ marginBottom: '20px' }}>
-                    <h3 style={{ fontSize: '22px', color: '#4a3f35', margin: '0 0 8px 0', fontWeight: 700 }}>
-                      העדפות של <span style={{ color: '#8a9e78' }}>{prefTeacher.first_name} {prefTeacher.last_name}</span>
-                    </h3>
+
+                    <div style={{ width: '48px', height: '3px', backgroundColor: '#8a9e78', borderRadius: '2px' }}></div>
                   </div>
 
                   {showScheduleConfirm && (
