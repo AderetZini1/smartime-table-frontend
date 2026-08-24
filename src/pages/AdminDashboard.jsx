@@ -136,6 +136,7 @@ export default function AdminDashboard() {
   const [search, setSearch] = useState('');
   const [tilesExpanded, setTilesExpanded] = useState(false);
   const [prefTeacher, setPrefTeacher] = useState(null);
+  const [showScheduleConfirm, setShowScheduleConfirm] = useState(false);
   const [prefData, setPrefData] = useState(null);
   const [prefLoading, setPrefLoading] = useState(false);
   const [prefSearch, setPrefSearch] = useState('');
@@ -238,6 +239,13 @@ export default function AdminDashboard() {
     } finally {
       setPublishing(false);
     }
+  };
+
+    const viewTeacherSchedule = () => {
+    setActiveTab('schedule');
+    setFilterType('teacher');
+    setSelectedValues([`${prefTeacher.first_name} ${prefTeacher.last_name}`]);
+    setShowScheduleConfirm(false);
   };
 
   const openTeacherPrefs = async (teacher) => {
@@ -628,12 +636,29 @@ export default function AdminDashboard() {
                 </>
               ) : (
                 <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                     <button onClick={() => { setPrefTeacher(null); setPrefData(null); }} style={{ ...styles.btnOutline, fontSize: '13px', padding: '6px 12px' }}>
                       <i className="ti ti-chevron-right" aria-hidden="true"></i> חזרה לרשימה
                     </button>
-                    <h3 style={{ fontSize: '17px', color: '#4a3f35', margin: 0 }}>העדפות של {prefTeacher.first_name} {prefTeacher.last_name}</h3>
+                    <button onClick={() => setShowScheduleConfirm(true)} style={{ ...styles.btnOutline, fontSize: '13px', padding: '6px 12px' }}>
+                      <i className="ti ti-calendar" aria-hidden="true"></i> צפה במערכת של המורה
+                    </button>
                   </div>
+                  <h3 style={{ fontSize: '17px', color: '#4a3f35', margin: '0 0 20px 0' }}>העדפות של {prefTeacher.first_name} {prefTeacher.last_name}</h3>
+
+                  {showScheduleConfirm && (
+                    <div onClick={() => setShowScheduleConfirm(false)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                      <div onClick={e => e.stopPropagation()} style={{ backgroundColor: '#FAF7F2', border: '1px solid #e2dacc', borderRadius: '14px', padding: '24px', width: '90%', maxWidth: '440px', boxShadow: '0 10px 30px rgba(0,0,0,0.15)' }}>
+                        <h3 style={{ margin: '0 0 12px 0', fontSize: '17px', color: '#4a3f35' }}>מעבר לתצוגת מערכת שעות</h3>
+                        <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#4a3f35', lineHeight: 1.6 }}>המעבר יציג את מערכת השעות של המורה, ולא את עמוד ההעדפות.</p>
+                        <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: '#c0705a', lineHeight: 1.6 }}>שים/י לב: אם התחלת לערוך ולא שמרת, השינויים לא יישמרו.</p>
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-start' }}>
+                          <button onClick={viewTeacherSchedule} style={{ backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '14px', cursor: 'pointer' }}>כן, אני רוצה לצפות במערכת</button>
+                          <button onClick={() => setShowScheduleConfirm(false)} style={{ ...styles.btnOutline, padding: '9px 16px', fontSize: '14px' }}>להישאר בעמוד ההעדפות בינתיים</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
   
                   {prefLoading ? (
                     <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px' }}>טוען…</div>
