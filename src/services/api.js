@@ -77,6 +77,7 @@ export const getTeacherPreferencesById = (id) => api.get(`/teacher-preferences/f
 export const getTeacherSubjectsById = (id) => api.get(`/teacher-subjects/for-teacher/${id}`);
 export const getTeacherGradeLevelsById = (id) => api.get(`/teacher-grade-levels/for-teacher/${id}`);
 export const getTeacherHomeroomById = (id) => api.get(`/teacher-homeroom-prefs/for-teacher/${id}`);
+export const saveTeacherPreferencesById = (id, data) => api.post(`/teacher-preferences/for-teacher/${id}`, data);
 
 export const getViolations = () => api2.get('/schedule/violations');
 
