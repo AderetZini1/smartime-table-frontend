@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher, getMyConstraints, getTeacherPreferencesById, getTeacherSubjectsById, getTeacherGradeLevelsById, getTeacherHomeroomById, saveTeacherPreferencesById } from '../services/api';
+import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher, getMyConstraints, getTeacherPreferencesById, getTeacherSubjectsById, getTeacherGradeLevelsById, getTeacherHomeroomById, saveTeacherPreferencesById, addTeacherSubjectById, removeTeacherSubjectById } from '../services/api';
 import AddTeacherModal from '../components/AddTeacherModal';
 import EditModal from '../components/EditModal';
 import AddRoomModal from '../components/AddRoomModal';
@@ -139,6 +139,7 @@ export default function AdminDashboard() {
   const [prefEditing, setPrefEditing] = useState(false);
   const [prefDraft, setPrefDraft] = useState({});
   const [prefSaving, setPrefSaving] = useState(false);
+  const [prefSubjectsDraft, setPrefSubjectsDraft] = useState([]);
   const [showScheduleConfirm, setShowScheduleConfirm] = useState(false);
   const [prefData, setPrefData] = useState(null);
   const [prefLoading, setPrefLoading] = useState(false);
@@ -260,6 +261,7 @@ export default function AdminDashboard() {
       priority_free_day: prefData.prefs?.priority_free_day ? 1 : 0,
       priority_consecutive: prefData.prefs?.priority_consecutive ? 1 : 0,
     });
+    setPrefSubjectsDraft(prefData.subjects.map(s => s.subject_id));
     setPrefEditing(true);
   };
 
@@ -270,6 +272,7 @@ export default function AdminDashboard() {
   const savePrefEdit = async () => {
     setPrefSaving(true);
     try {
+      // 1. Preferences (priorities + carried-through hours)
       const payload = {
         min_hours: prefData.prefs?.min_hours ?? 18,
         max_hours: prefData.prefs?.max_hours ?? 26,
@@ -279,11 +282,30 @@ export default function AdminDashboard() {
         priority_free_day: prefDraft.priority_free_day,
         priority_consecutive: prefDraft.priority_consecutive,
       };
-      const res = await saveTeacherPreferencesById(prefTeacher.id, payload);
-      setPrefData(prev => ({ ...prev, prefs: res.data }));
+      const prefRes = await saveTeacherPreferencesById(prefTeacher.id, payload);
+
+      // 2. Subjects: add the newly-checked, remove the newly-unchecked
+      const originalSubjectIds = prefData.subjects.map(s => s.subject_id);
+      const toAdd = prefSubjectsDraft.filter(id => !originalSubjectIds.includes(id));
+      const toRemove = originalSubjectIds.filter(id => !prefSubjectsDraft.includes(id));
+      for (const sid of toAdd) {
+        try {
+          await addTeacherSubjectById(prefTeacher.id, sid);
+        } catch (e) {
+          if (e?.response?.status !== 400) throw e; // ignore "already exists", surface real errors
+        }
+      }
+      for (const sid of toRemove) {
+        await removeTeacherSubjectById(prefTeacher.id, sid);
+      }
+
+      // 3. Refetch subjects so the read-only view shows canonical rows
+      const subjectsRes = await getTeacherSubjectsById(prefTeacher.id);
+
+      setPrefData(prev => ({ ...prev, prefs: prefRes.data, subjects: subjectsRes.data }));
       setPrefEditing(false);
     } catch (err) {
-      alert('שמירת ההעדפות נכשלה. נסה/י שוב.');
+      alert('השמירה נכשלה. נסה/י שוב.');
     } finally {
       setPrefSaving(false);
     }
@@ -731,14 +753,33 @@ export default function AdminDashboard() {
   
                       {/* Subjects */}
                       <div>
+                      {/* Subjects */}
+                      <div>
                         <div style={{ fontSize: '14px', color: '#4a3f35', fontWeight: 600, marginBottom: '8px' }}>מקצועות שהמורה מלמד/ת</div>
-                        {prefData.subjects.length === 0 ? (
-                          <div style={{ fontSize: '13px', color: '#c8baa6' }}>לא נבחרו מקצועות</div>
+                        {!prefEditing ? (
+                          prefData.subjects.length === 0 ? (
+                            <div style={{ fontSize: '13px', color: '#c8baa6' }}>לא נבחרו מקצועות</div>
+                          ) : (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                              {prefData.subjects.map(s => {
+                                const subj = subjects.find(x => x.id === s.subject_id);
+                                return <span key={s.subject_id} style={{ padding: '5px 12px', borderRadius: '20px', backgroundColor: '#EDF4E8', color: '#4a7c3f', fontSize: '13px' }}>{subj ? subj.subject_name : `#${s.subject_id}`}</span>;
+                              })}
+                            </div>
+                          )
                         ) : (
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                            {prefData.subjects.map(s => {
-                              const subj = subjects.find(x => x.id === s.subject_id);
-                              return <span key={s.subject_id} style={{ padding: '5px 12px', borderRadius: '20px', backgroundColor: '#EDF4E8', color: '#4a7c3f', fontSize: '13px' }}>{subj ? subj.subject_name : `#${s.subject_id}`}</span>;
+                            {subjects.map(subj => {
+                              const selected = prefSubjectsDraft.includes(subj.id);
+                              return (
+                                <button
+                                  key={subj.id}
+                                  onClick={() => setPrefSubjectsDraft(d => d.includes(subj.id) ? d.filter(x => x !== subj.id) : [...d, subj.id])}
+                                  style={{ padding: '5px 12px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer', border: selected ? '1px solid #8a9e78' : '1px solid #e2dacc', backgroundColor: selected ? '#EDF4E8' : '#fff', color: selected ? '#4a7c3f' : '#8a7a6e' }}
+                                >
+                                  {subj.subject_name}
+                                </button>
+                              );
                             })}
                           </div>
                         )}
