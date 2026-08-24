@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher, getMyConstraints, getTeacherPreferencesById, getTeacherSubjectsById, getTeacherGradeLevelsById, getTeacherHomeroomById, saveTeacherPreferencesById, addTeacherSubjectById, removeTeacherSubjectById, addTeacherGradeLevelById, removeTeacherGradeLevelById, saveTeacherHomeroomById } from '../services/api';
+import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher, getMyConstraints, getTeacherPreferencesById, getTeacherSubjectsById, getTeacherGradeLevelsById, getTeacherHomeroomById, saveTeacherPreferencesById, addTeacherSubjectById, removeTeacherSubjectById, addTeacherGradeLevelById, removeTeacherGradeLevelById, saveTeacherHomeroomById, createConstraint, deleteConstraint } from '../services/api';
 import AddTeacherModal from '../components/AddTeacherModal';
 import EditModal from '../components/EditModal';
 import AddRoomModal from '../components/AddRoomModal';
@@ -143,6 +143,7 @@ export default function AdminDashboard() {
   const [prefGradesDraft, setPrefGradesDraft] = useState([]);
   const [prefHomeroomDraft, setPrefHomeroomDraft] = useState({ wants_homeroom: false, preferred_group_id: null, wants_continue_with_previous: false });
   const [allGroups, setAllGroups] = useState([]);
+  const [prefConstraintsDraft, setPrefConstraintsDraft] = useState({});
   const [showScheduleConfirm, setShowScheduleConfirm] = useState(false);
   const [prefData, setPrefData] = useState(null);
   const [prefLoading, setPrefLoading] = useState(false);
@@ -272,6 +273,9 @@ export default function AdminDashboard() {
       preferred_group_id: prefData.homeroom?.preferred_group_id ?? null,
       wants_continue_with_previous: prefData.homeroom?.wants_continue_with_previous ?? false,
     });
+    const cDraft = {};
+    prefData.constraints.forEach(c => { cDraft[c.timeslot_id] = c.constraint_type === 'hard' ? 'hard' : 'soft'; });
+    setPrefConstraintsDraft(cDraft);
     setPrefEditing(true);
   };
 
@@ -327,18 +331,47 @@ export default function AdminDashboard() {
         wants_continue_with_previous: prefHomeroomDraft.wants_homeroom ? prefHomeroomDraft.wants_continue_with_previous : false,
       });
 
-      // 5. Refetch subjects + grades + homeroom so the read-only view shows canonical rows
+      // 5. Availability constraints: diff draft vs original (create/delete; changed = delete+create)
+      const originalCon = {};
+      prefData.constraints.forEach(c => { originalCon[c.timeslot_id] = { type: c.constraint_type === 'hard' ? 'hard' : 'soft', id: c.id }; });
+      const allTimeslots = new Set([...Object.keys(originalCon), ...Object.keys(prefConstraintsDraft)].map(Number));
+      for (const tsId of allTimeslots) {
+        const orig = originalCon[tsId];
+        const draft = prefConstraintsDraft[tsId];
+        if (orig && !draft) {
+          await deleteConstraint(orig.id);                         // removed
+        } else if (!orig && draft) {
+          await createConstraint({ teacher_id: prefTeacher.id, timeslot_id: tsId, weight: 1, constraint_type: draft });  // added
+        } else if (orig && draft && orig.type !== draft) {
+          await deleteConstraint(orig.id);                         // changed: delete old...
+          await createConstraint({ teacher_id: prefTeacher.id, timeslot_id: tsId, weight: 1, constraint_type: draft });  // ...create new
+        }
+      }
+
+      // 6. Refetch everything so the read-only view shows canonical rows
       const subjectsRes = await getTeacherSubjectsById(prefTeacher.id);
       const gradesRes = await getTeacherGradeLevelsById(prefTeacher.id);
       const homeroomRes = await getTeacherHomeroomById(prefTeacher.id);
+      const conRes = await getMyConstraints();
 
-      setPrefData(prev => ({ ...prev, prefs: prefRes.data, subjects: subjectsRes.data, grades: gradesRes.data, homeroom: homeroomRes.data }));
+      setPrefData(prev => ({ ...prev, prefs: prefRes.data, subjects: subjectsRes.data, grades: gradesRes.data, homeroom: homeroomRes.data, constraints: conRes.data.filter(c => c.teacher_id === prefTeacher.id) }));
       setPrefEditing(false);
     } catch (err) {
       alert('השמירה נכשלה. נסה/י שוב.');
     } finally {
       setPrefSaving(false);
     }
+  };
+
+  const cyclePrefCell = (timeslotId) => {
+    setPrefConstraintsDraft(d => {
+      const next = { ...d };
+      const cur = next[timeslotId];
+      if (!cur) next[timeslotId] = 'soft';           // blank -> מעדיף שלא
+      else if (cur === 'soft') next[timeslotId] = 'hard';  // soft -> לא יכול
+      else delete next[timeslotId];                  // hard -> blank
+      return next;
+    });
   };
 
   const openTeacherPrefs = async (teacher) => {
@@ -966,24 +999,68 @@ export default function AdminDashboard() {
                       {/* Availability constraints */}
                       <div>
                         <div style={{ fontSize: '14px', color: '#4a3f35', fontWeight: 600, marginBottom: '8px' }}>אילוצי זמינות</div>
-                        {prefData.constraints.length === 0 ? (
-                          <div style={{ fontSize: '13px', color: '#c8baa6' }}>אין אילוצי זמינות</div>
+                        {!prefEditing ? (
+                          prefData.constraints.length === 0 ? (
+                            <div style={{ fontSize: '13px', color: '#c8baa6' }}>אין אילוצי זמינות</div>
+                          ) : (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                              {prefData.constraints
+                                .slice()
+                                .sort((a, b) => a.timeslot_id - b.timeslot_id)
+                                .map(c => {
+                                  const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'];
+                                  const dayIdx = Math.floor((c.timeslot_id - 1) / 8);
+                                  const hour = ((c.timeslot_id - 1) % 8) + 1;
+                                  const hard = c.constraint_type === 'hard';
+                                  return (
+                                    <span key={c.id} style={{ padding: '5px 12px', borderRadius: '8px', fontSize: '12px', backgroundColor: hard ? '#FAE8E8' : '#FFF3A3', color: hard ? '#c0705a' : '#a08c30' }}>
+                                      יום {dayNames[dayIdx]} · שעה {hour} · {hard ? 'לא יכול' : 'מעדיף שלא'}
+                                    </span>
+                                  );
+                                })}
+                            </div>
+                          )
                         ) : (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                            {prefData.constraints
-                              .slice()
-                              .sort((a, b) => a.timeslot_id - b.timeslot_id)
-                              .map(c => {
-                                const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'];
-                                const dayIdx = Math.floor((c.timeslot_id - 1) / 8);   // 0..5
-                                const hour = ((c.timeslot_id - 1) % 8) + 1;           // 1..8
-                                const hard = c.constraint_type === 'hard';
-                                return (
-                                  <span key={c.id} style={{ padding: '5px 12px', borderRadius: '8px', fontSize: '12px', backgroundColor: hard ? '#FAE8E8' : '#FFF3A3', color: hard ? '#c0705a' : '#a08c30' }}>
-                                    יום {dayNames[dayIdx]} · שעה {hour} · {hard ? 'לא יכול' : 'מעדיף שלא'}
-                                  </span>
-                                );
-                              })}
+                          <div>
+                            <div style={{ display: 'flex', gap: '16px', marginBottom: '10px', fontSize: '12px', color: '#8a7a6e' }}>
+                              <span><span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#FFF3A3', marginLeft: '5px', verticalAlign: 'middle' }}></span>מעדיף שלא</span>
+                              <span><span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#FAE8E8', marginLeft: '5px', verticalAlign: 'middle' }}></span>לא יכול</span>
+                              <span style={{ color: '#c8baa6' }}>לחיצה מחליפה בין המצבים</span>
+                            </div>
+                            <table style={{ borderCollapse: 'separate', borderSpacing: '4px' }}>
+                              <thead>
+                                <tr>
+                                  <th></th>
+                                  {['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'].map((d, di) => (
+                                    <th key={di} style={{ fontSize: '12px', color: '#4a3f35', fontWeight: 600, padding: '2px 6px' }}>{d}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {[1, 2, 3, 4, 5, 6, 7, 8].map(hour => (
+                                  <tr key={hour}>
+                                    <td style={{ fontSize: '12px', color: '#8a7a6e', padding: '2px 6px', whiteSpace: 'nowrap' }}>שיעור {hour}</td>
+                                    {[0, 1, 2, 3, 4, 5].map(dayIdx => {
+                                      if (dayIdx === 5 && hour > 4) return <td key={dayIdx}></td>;  // Friday has hours 1-4 only
+                                      const tsId = dayIdx * 8 + hour;
+                                      const state = prefConstraintsDraft[tsId];
+                                      const bg = state === 'hard' ? '#FAE8E8' : state === 'soft' ? '#FFF3A3' : '#f7f4ef';
+                                      const mark = state === 'hard' ? '✕' : state === 'soft' ? '–' : '';
+                                      const color = state === 'hard' ? '#c0705a' : '#a08c30';
+                                      return (
+                                        <td key={dayIdx}>
+                                          <button
+                                            onClick={() => cyclePrefCell(tsId)}
+                                            style={{ width: '38px', height: '34px', borderRadius: '8px', border: '1px solid #e2dacc', backgroundColor: bg, color, cursor: 'pointer', fontSize: '15px', lineHeight: 1 }}
+                                            aria-label={`יום ${['ראשון','שני','שלישי','רביעי','חמישי','שישי'][dayIdx]} שעה ${hour}`}
+                                          >{mark}</button>
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
                           </div>
                         )}
                       </div>
