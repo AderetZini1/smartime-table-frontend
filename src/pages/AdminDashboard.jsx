@@ -678,10 +678,24 @@ export default function AdminDashboard() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                     <button onClick={() => { setPrefTeacher(null); setPrefData(null); }} style={{ ...styles.btnOutline, fontSize: '13px', padding: '6px 12px' }}>
                       <i className="ti ti-chevron-right" aria-hidden="true"></i> חזרה לרשימה
-                    </button>
+                    </button>                      
                     <button onClick={() => setShowScheduleConfirm(true)} style={{ ...styles.btnOutline, fontSize: '13px', padding: '6px 12px' }}>
                       <i className="ti ti-calendar" aria-hidden="true"></i> צפה במערכת של המורה
                     </button>
+                    {prefData && (
+                      !prefEditing ? (
+                        <button onClick={startPrefEdit} style={{ ...styles.btnOutline, fontSize: '13px', padding: '6px 12px' }}>
+                          <i className="ti ti-edit" aria-hidden="true"></i> ערוך
+                        </button>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button onClick={savePrefEdit} disabled={prefSaving} style={{ backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '8px', padding: '6px 14px', fontSize: '13px', cursor: prefSaving ? 'default' : 'pointer', opacity: prefSaving ? 0.6 : 1 }}>
+                            {prefSaving ? 'שומר…' : 'שמור'}
+                          </button>
+                          <button onClick={cancelPrefEdit} disabled={prefSaving} style={{ ...styles.btnOutline, fontSize: '13px', padding: '6px 14px' }}>ביטול</button>
+                        </div>
+                      )
+                    )}
                   </div>
                   <div style={{ marginBottom: '20px' }}>
                     <h3 style={{ fontSize: '22px', color: '#4a3f35', margin: '0 0 8px 0', fontWeight: 700 }}>
