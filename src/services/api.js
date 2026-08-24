@@ -80,6 +80,8 @@ export const getTeacherHomeroomById = (id) => api.get(`/teacher-homeroom-prefs/f
 export const saveTeacherPreferencesById = (id, data) => api.post(`/teacher-preferences/for-teacher/${id}`, data);
 export const addTeacherSubjectById = (id, subjectId) => api.post(`/teacher-subjects/for-teacher/${id}/${subjectId}`);
 export const removeTeacherSubjectById = (id, subjectId) => api.delete(`/teacher-subjects/for-teacher/${id}/${subjectId}`);
+export const addTeacherGradeLevelById = (id, gradeLevel) => api.post(`/teacher-grade-levels/for-teacher/${id}/${gradeLevel}`);
+export const removeTeacherGradeLevelById = (id, gradeLevel) => api.delete(`/teacher-grade-levels/for-teacher/${id}/${gradeLevel}`);
 
 export const getViolations = () => api2.get('/schedule/violations');
 
