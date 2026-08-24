@@ -244,11 +244,13 @@ export default function AdminDashboard() {
     }
   };
 
-    const viewTeacherSchedule = () => {
+  const viewTeacherSchedule = () => {
     setActiveTab('schedule');
     setFilterType('teacher');
     setSelectedValues([`${prefTeacher.first_name} ${prefTeacher.last_name}`]);
     setShowScheduleConfirm(false);
+    setPrefEditing(false);
+    setPrefDraft({});
   };
 
     const startPrefEdit = () => {
@@ -288,6 +290,8 @@ export default function AdminDashboard() {
   };
 
   const openTeacherPrefs = async (teacher) => {
+    setPrefEditing(false);
+    setPrefDraft({});
     setPrefTeacher(teacher);
     setPrefLoading(true);
     setPrefData(null);
@@ -676,7 +680,7 @@ export default function AdminDashboard() {
               ) : (
                 <>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                    <button onClick={() => { setPrefTeacher(null); setPrefData(null); }} style={{ ...styles.btnOutline, fontSize: '13px', padding: '6px 12px' }}>
+                    <button onClick={() => { setPrefTeacher(null); setPrefData(null); setPrefEditing(false); setPrefDraft({}); }} style={{ ...styles.btnOutline, fontSize: '13px', padding: '6px 12px' }}>
                       <i className="ti ti-chevron-right" aria-hidden="true"></i> חזרה לרשימה
                     </button>                      
                     <button onClick={() => setShowScheduleConfirm(true)} style={{ ...styles.btnOutline, fontSize: '13px', padding: '6px 12px' }}>
@@ -764,21 +768,7 @@ export default function AdminDashboard() {
   
                       {/* Priority preferences */}
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                          <div style={{ fontSize: '14px', color: '#4a3f35', fontWeight: 600 }}>העדפות שיבוץ</div>
-                          {!prefEditing ? (
-                            <button onClick={startPrefEdit} style={{ ...styles.btnOutline, fontSize: '12px', padding: '5px 12px' }}>
-                              <i className="ti ti-edit" aria-hidden="true"></i> ערוך
-                            </button>
-                          ) : (
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                              <button onClick={savePrefEdit} disabled={prefSaving} style={{ backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '8px', padding: '5px 14px', fontSize: '12px', cursor: prefSaving ? 'default' : 'pointer', opacity: prefSaving ? 0.6 : 1 }}>
-                                {prefSaving ? 'שומר…' : 'שמור'}
-                              </button>
-                              <button onClick={cancelPrefEdit} disabled={prefSaving} style={{ ...styles.btnOutline, fontSize: '12px', padding: '5px 14px' }}>ביטול</button>
-                            </div>
-                          )}
-                        </div>
+                        <div style={{ fontSize: '14px', color: '#4a3f35', fontWeight: 600, marginBottom: '8px' }}>העדפות שיבוץ</div>
 
                         {/* Read-only hours facts (never editable by the principal) */}
                         <div style={{ fontSize: '13px', color: '#8a7a6e', lineHeight: 1.8, marginBottom: prefEditing ? '14px' : '0' }}>
