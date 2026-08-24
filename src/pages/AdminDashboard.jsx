@@ -261,6 +261,7 @@ export default function AdminDashboard() {
       priority_no_gaps: prefData.prefs?.priority_no_gaps ? 1 : 0,
       priority_free_day: prefData.prefs?.priority_free_day ? 1 : 0,
       priority_consecutive: prefData.prefs?.priority_consecutive ? 1 : 0,
+      preferred_consecutive: prefData.prefs?.preferred_consecutive ?? false,
     });
     setPrefSubjectsDraft(prefData.subjects.map(s => s.subject_id));
     setPrefGradesDraft(prefData.grades.map(g => g.grade_level));
@@ -278,7 +279,7 @@ export default function AdminDashboard() {
       const payload = {
         min_hours: prefData.prefs?.min_hours ?? 18,
         max_hours: prefData.prefs?.max_hours ?? 26,
-        preferred_consecutive: prefData.prefs?.preferred_consecutive ?? false,
+        preferred_consecutive: prefDraft.preferred_consecutive,
         priority_early_finish: prefDraft.priority_early_finish,
         priority_no_gaps: prefDraft.priority_no_gaps,
         priority_free_day: prefDraft.priority_free_day,
@@ -805,7 +806,7 @@ export default function AdminDashboard() {
                             <div style={{ fontSize: '13px', color: '#c8baa6' }}>לא נבחרו שכבות</div>
                           ) : (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                              {prefData.grades.map(g => <span key={g.grade_level} style={{ padding: '5px 12px', borderRadius: '20px', backgroundColor: '#EDF4E8', color: '#4a7c3f', fontSize: '13px' }}>שכבה {g.grade_level}</span>)}
+                              {prefData.grades.map(g => <span key={g.grade_level} style={{ padding: '5px 12px', borderRadius: '20px', backgroundColor: '#EDF4E8', color: '#4a7c3f', fontSize: '13px' }}>כיתה {['א', 'ב', 'ג', 'ד', 'ה', 'ו'][g.grade_level - 1]}'</span>)}
                             </div>
                           )
                         ) : (
@@ -818,7 +819,7 @@ export default function AdminDashboard() {
                                   onClick={() => setPrefGradesDraft(d => d.includes(gl) ? d.filter(x => x !== gl) : [...d, gl])}
                                   style={{ padding: '5px 12px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer', border: selected ? '1px solid #8a9e78' : '1px solid #e2dacc', backgroundColor: selected ? '#EDF4E8' : '#fff', color: selected ? '#4a7c3f' : '#8a7a6e' }}
                                 >
-                                  שכבה {gl}
+                                  כיתה {['א', 'ב', 'ג', 'ד', 'ה', 'ו'][gl - 1]}'
                                 </button>
                               );
                             })}
@@ -855,6 +856,7 @@ export default function AdminDashboard() {
                               <div>ללא חלונות: {prefData.prefs.priority_no_gaps ? 'מועדף' : 'ללא'}</div>
                               <div>יום חופשי: {prefData.prefs.priority_free_day ? 'מועדף' : 'ללא'}</div>
                               <div>שיעורים רצופים: {prefData.prefs.priority_consecutive ? 'מועדף' : 'ללא'}</div>
+                              <div>העדפת שיעורים: {prefData.prefs.preferred_consecutive ? 'רצופים' : 'עם הפסקות'}</div>
                             </div>
                           )
                         ) : (
@@ -876,6 +878,23 @@ export default function AdminDashboard() {
                                 </button>
                               </div>
                             ))}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: '320px', marginTop: '4px' }}>
+                              <span style={{ fontSize: '13px', color: '#4a3f35' }}>העדפת שיעורים</span>
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                <button
+                                  onClick={() => setPrefDraft(d => ({ ...d, preferred_consecutive: true }))}
+                                  style={{ padding: '5px 12px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer', border: prefDraft.preferred_consecutive ? '1px solid #8a9e78' : '1px solid #e2dacc', backgroundColor: prefDraft.preferred_consecutive ? '#EDF4E8' : '#fff', color: prefDraft.preferred_consecutive ? '#4a7c3f' : '#8a7a6e' }}
+                                >
+                                  רצופים
+                                </button>
+                                <button
+                                  onClick={() => setPrefDraft(d => ({ ...d, preferred_consecutive: false }))}
+                                  style={{ padding: '5px 12px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer', border: !prefDraft.preferred_consecutive ? '1px solid #8a9e78' : '1px solid #e2dacc', backgroundColor: !prefDraft.preferred_consecutive ? '#EDF4E8' : '#fff', color: !prefDraft.preferred_consecutive ? '#4a7c3f' : '#8a7a6e' }}
+                                >
+                                  עם הפסקות
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
