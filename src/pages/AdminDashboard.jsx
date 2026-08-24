@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher, getMyConstraints, getTeacherPreferencesById, getTeacherSubjectsById, getTeacherGradeLevelsById, getTeacherHomeroomById, saveTeacherPreferencesById, addTeacherSubjectById, removeTeacherSubjectById, addTeacherGradeLevelById, removeTeacherGradeLevelById } from '../services/api';
+import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher, getMyConstraints, getTeacherPreferencesById, getTeacherSubjectsById, getTeacherGradeLevelsById, getTeacherHomeroomById, saveTeacherPreferencesById, addTeacherSubjectById, removeTeacherSubjectById, addTeacherGradeLevelById, removeTeacherGradeLevelById, addTeacherGradeLevelById, removeTeacherGradeLevelById, saveTeacherHomeroomById } from '../services/api';
 import AddTeacherModal from '../components/AddTeacherModal';
 import EditModal from '../components/EditModal';
 import AddRoomModal from '../components/AddRoomModal';
@@ -141,6 +141,8 @@ export default function AdminDashboard() {
   const [prefSaving, setPrefSaving] = useState(false);
   const [prefSubjectsDraft, setPrefSubjectsDraft] = useState([]);
   const [prefGradesDraft, setPrefGradesDraft] = useState([]);
+  const [prefHomeroomDraft, setPrefHomeroomDraft] = useState({ wants_homeroom: false, preferred_group_id: null, wants_continue_with_previous: false });
+  const [allGroups, setAllGroups] = useState([]);
   const [showScheduleConfirm, setShowScheduleConfirm] = useState(false);
   const [prefData, setPrefData] = useState(null);
   const [prefLoading, setPrefLoading] = useState(false);
@@ -265,6 +267,11 @@ export default function AdminDashboard() {
     });
     setPrefSubjectsDraft(prefData.subjects.map(s => s.subject_id));
     setPrefGradesDraft(prefData.grades.map(g => g.grade_level));
+    setPrefHomeroomDraft({
+      wants_homeroom: prefData.homeroom?.wants_homeroom ?? false,
+      preferred_group_id: prefData.homeroom?.preferred_group_id ?? null,
+      wants_continue_with_previous: prefData.homeroom?.wants_continue_with_previous ?? false,
+    });
     setPrefEditing(true);
   };
 
@@ -313,11 +320,19 @@ export default function AdminDashboard() {
         await removeTeacherGradeLevelById(prefTeacher.id, gl);
       }
 
-      // 4. Refetch subjects + grades so the read-only view shows canonical rows
+      // 4. Homeroom preference (single upsert)
+      await saveTeacherHomeroomById(prefTeacher.id, {
+        wants_homeroom: prefHomeroomDraft.wants_homeroom,
+        preferred_group_id: prefHomeroomDraft.wants_homeroom ? prefHomeroomDraft.preferred_group_id : null,
+        wants_continue_with_previous: prefHomeroomDraft.wants_homeroom ? prefHomeroomDraft.wants_continue_with_previous : false,
+      });
+
+      // 5. Refetch subjects + grades + homeroom so the read-only view shows canonical rows
       const subjectsRes = await getTeacherSubjectsById(prefTeacher.id);
       const gradesRes = await getTeacherGradeLevelsById(prefTeacher.id);
+      const homeroomRes = await getTeacherHomeroomById(prefTeacher.id);
 
-      setPrefData(prev => ({ ...prev, prefs: prefRes.data, subjects: subjectsRes.data, grades: gradesRes.data }));
+      setPrefData(prev => ({ ...prev, prefs: prefRes.data, subjects: subjectsRes.data, grades: gradesRes.data, homeroom: homeroomRes.data }));
       setPrefEditing(false);
     } catch (err) {
       alert('השמירה נכשלה. נסה/י שוב.');
@@ -329,6 +344,7 @@ export default function AdminDashboard() {
   const openTeacherPrefs = async (teacher) => {
     setPrefEditing(false);
     setPrefDraft({});
+    getStudentGroups().then(r => setAllGroups(r.data)).catch(() => {});
     setPrefTeacher(teacher);
     setPrefLoading(true);
     setPrefData(null);
@@ -830,11 +846,59 @@ export default function AdminDashboard() {
                       {/* Homeroom */}
                       <div>
                         <div style={{ fontSize: '14px', color: '#4a3f35', fontWeight: 600, marginBottom: '8px' }}>חינוך כיתה</div>
-                        <div style={{ fontSize: '13px', color: '#8a7a6e' }}>
-                          {prefData.homeroom && prefData.homeroom.wants_homeroom
-                            ? 'המורה מעוניין/ת בחינוך כיתה'
-                            : 'המורה לא ביקש/ה חינוך כיתה'}
-                        </div>
+                        {!prefEditing ? (
+                          <div style={{ fontSize: '13px', color: '#8a7a6e', lineHeight: 1.8 }}>
+                            <div>
+                              {prefData.homeroom && prefData.homeroom.wants_homeroom
+                                ? 'המורה מעוניין/ת בחינוך כיתה'
+                                : 'המורה לא ביקש/ה חינוך כיתה'}
+                            </div>
+                            {prefData.homeroom?.wants_homeroom && (
+                              <>
+                                <div>כיתה מועדפת: {allGroups.find(g => g.id === prefData.homeroom.preferred_group_id)?.group_name || 'לא נבחרה'}</div>
+                                <div>המשך עם הכיתה הקודמת: {prefData.homeroom.wants_continue_with_previous ? 'כן' : 'לא'}</div>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: '320px' }}>
+                              <span style={{ fontSize: '13px', color: '#4a3f35' }}>מעוניין/ת בחינוך כיתה</span>
+                              <button
+                                onClick={() => setPrefHomeroomDraft(d => ({ ...d, wants_homeroom: !d.wants_homeroom }))}
+                                style={{ width: '52px', height: '28px', borderRadius: '20px', border: 'none', cursor: 'pointer', backgroundColor: prefHomeroomDraft.wants_homeroom ? '#8a9e78' : '#d8d0c4', position: 'relative', transition: 'background-color 0.15s' }}
+                                aria-label="מעוניין בחינוך כיתה"
+                              >
+                                <span style={{ position: 'absolute', top: '3px', [prefHomeroomDraft.wants_homeroom ? 'left' : 'right']: '3px', width: '22px', height: '22px', borderRadius: '50%', backgroundColor: '#fff' }}></span>
+                              </button>
+                            </div>
+                            {prefHomeroomDraft.wants_homeroom && (
+                              <>
+                                <div style={{ maxWidth: '320px' }}>
+                                  <div style={{ fontSize: '13px', color: '#4a3f35', marginBottom: '6px' }}>כיתה מועדפת</div>
+                                  <select
+                                    value={prefHomeroomDraft.preferred_group_id ?? ''}
+                                    onChange={e => setPrefHomeroomDraft(d => ({ ...d, preferred_group_id: e.target.value ? parseInt(e.target.value) : null }))}
+                                    style={{ ...styles.input, width: '100%' }}
+                                  >
+                                    <option value="">ללא העדפה</option>
+                                    {allGroups.map(g => <option key={g.id} value={g.id}>{g.group_name}</option>)}
+                                  </select>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: '320px' }}>
+                                  <span style={{ fontSize: '13px', color: '#4a3f35' }}>המשך עם הכיתה הקודמת</span>
+                                  <button
+                                    onClick={() => setPrefHomeroomDraft(d => ({ ...d, wants_continue_with_previous: !d.wants_continue_with_previous }))}
+                                    style={{ width: '52px', height: '28px', borderRadius: '20px', border: 'none', cursor: 'pointer', backgroundColor: prefHomeroomDraft.wants_continue_with_previous ? '#8a9e78' : '#d8d0c4', position: 'relative', transition: 'background-color 0.15s' }}
+                                    aria-label="המשך עם הכיתה הקודמת"
+                                  >
+                                    <span style={{ position: 'absolute', top: '3px', [prefHomeroomDraft.wants_continue_with_previous ? 'left' : 'right']: '3px', width: '22px', height: '22px', borderRadius: '50%', backgroundColor: '#fff' }}></span>
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
   
                       {/* Priority preferences */}
