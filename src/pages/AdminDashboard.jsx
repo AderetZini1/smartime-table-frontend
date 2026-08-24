@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher, getMyConstraints, getTeacherPreferencesById, getTeacherSubjectsById, getTeacherGradeLevelsById, getTeacherHomeroomById, saveTeacherPreferencesById, addTeacherSubjectById, removeTeacherSubjectById } from '../services/api';
+import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher, getMyConstraints, getTeacherPreferencesById, getTeacherSubjectsById, getTeacherGradeLevelsById, getTeacherHomeroomById, saveTeacherPreferencesById, addTeacherSubjectById, removeTeacherSubjectById, addTeacherGradeLevelById, removeTeacherGradeLevelById } from '../services/api';
 import AddTeacherModal from '../components/AddTeacherModal';
 import EditModal from '../components/EditModal';
 import AddRoomModal from '../components/AddRoomModal';
@@ -140,6 +140,7 @@ export default function AdminDashboard() {
   const [prefDraft, setPrefDraft] = useState({});
   const [prefSaving, setPrefSaving] = useState(false);
   const [prefSubjectsDraft, setPrefSubjectsDraft] = useState([]);
+  const [prefGradesDraft, setPrefGradesDraft] = useState([]);
   const [showScheduleConfirm, setShowScheduleConfirm] = useState(false);
   const [prefData, setPrefData] = useState(null);
   const [prefLoading, setPrefLoading] = useState(false);
@@ -262,6 +263,7 @@ export default function AdminDashboard() {
       priority_consecutive: prefData.prefs?.priority_consecutive ? 1 : 0,
     });
     setPrefSubjectsDraft(prefData.subjects.map(s => s.subject_id));
+    setPrefGradesDraft(prefData.grades.map(g => g.grade_level));
     setPrefEditing(true);
   };
 
@@ -284,25 +286,37 @@ export default function AdminDashboard() {
       };
       const prefRes = await saveTeacherPreferencesById(prefTeacher.id, payload);
 
-      // 2. Subjects: add the newly-checked, remove the newly-unchecked
+      // 2. Subjects: add newly-checked, remove newly-unchecked
       const originalSubjectIds = prefData.subjects.map(s => s.subject_id);
-      const toAdd = prefSubjectsDraft.filter(id => !originalSubjectIds.includes(id));
-      const toRemove = originalSubjectIds.filter(id => !prefSubjectsDraft.includes(id));
-      for (const sid of toAdd) {
+      const subjToAdd = prefSubjectsDraft.filter(id => !originalSubjectIds.includes(id));
+      const subjToRemove = originalSubjectIds.filter(id => !prefSubjectsDraft.includes(id));
+      for (const sid of subjToAdd) {
         try {
           await addTeacherSubjectById(prefTeacher.id, sid);
         } catch (e) {
           if (e?.response?.status !== 400) throw e; // ignore "already exists", surface real errors
         }
       }
-      for (const sid of toRemove) {
+      for (const sid of subjToRemove) {
         await removeTeacherSubjectById(prefTeacher.id, sid);
       }
 
-      // 3. Refetch subjects so the read-only view shows canonical rows
-      const subjectsRes = await getTeacherSubjectsById(prefTeacher.id);
+      // 3. Grade levels: add newly-checked, remove newly-unchecked
+      const originalGrades = prefData.grades.map(g => g.grade_level);
+      const gradeToAdd = prefGradesDraft.filter(gl => !originalGrades.includes(gl));
+      const gradeToRemove = originalGrades.filter(gl => !prefGradesDraft.includes(gl));
+      for (const gl of gradeToAdd) {
+        await addTeacherGradeLevelById(prefTeacher.id, gl);
+      }
+      for (const gl of gradeToRemove) {
+        await removeTeacherGradeLevelById(prefTeacher.id, gl);
+      }
 
-      setPrefData(prev => ({ ...prev, prefs: prefRes.data, subjects: subjectsRes.data }));
+      // 4. Refetch subjects + grades so the read-only view shows canonical rows
+      const subjectsRes = await getTeacherSubjectsById(prefTeacher.id);
+      const gradesRes = await getTeacherGradeLevelsById(prefTeacher.id);
+
+      setPrefData(prev => ({ ...prev, prefs: prefRes.data, subjects: subjectsRes.data, grades: gradesRes.data }));
       setPrefEditing(false);
     } catch (err) {
       alert('השמירה נכשלה. נסה/י שוב.');
@@ -786,11 +800,28 @@ export default function AdminDashboard() {
                       {/* Grade levels */}
                       <div>
                         <div style={{ fontSize: '14px', color: '#4a3f35', fontWeight: 600, marginBottom: '8px' }}>שכבות מועדפות</div>
-                        {prefData.grades.length === 0 ? (
-                          <div style={{ fontSize: '13px', color: '#c8baa6' }}>לא נבחרו שכבות</div>
+                        {!prefEditing ? (
+                          prefData.grades.length === 0 ? (
+                            <div style={{ fontSize: '13px', color: '#c8baa6' }}>לא נבחרו שכבות</div>
+                          ) : (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                              {prefData.grades.map(g => <span key={g.grade_level} style={{ padding: '5px 12px', borderRadius: '20px', backgroundColor: '#EDF4E8', color: '#4a7c3f', fontSize: '13px' }}>שכבה {g.grade_level}</span>)}
+                            </div>
+                          )
                         ) : (
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                            {prefData.grades.map(g => <span key={g.grade_level} style={{ padding: '5px 12px', borderRadius: '20px', backgroundColor: '#EDF4E8', color: '#4a7c3f', fontSize: '13px' }}>שכבה {g.grade_level}</span>)}
+                            {[1, 2, 3, 4, 5, 6].map(gl => {
+                              const selected = prefGradesDraft.includes(gl);
+                              return (
+                                <button
+                                  key={gl}
+                                  onClick={() => setPrefGradesDraft(d => d.includes(gl) ? d.filter(x => x !== gl) : [...d, gl])}
+                                  style={{ padding: '5px 12px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer', border: selected ? '1px solid #8a9e78' : '1px solid #e2dacc', backgroundColor: selected ? '#EDF4E8' : '#fff', color: selected ? '#4a7c3f' : '#8a7a6e' }}
+                                >
+                                  שכבה {gl}
+                                </button>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
