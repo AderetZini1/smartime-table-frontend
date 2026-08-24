@@ -753,8 +753,6 @@ export default function AdminDashboard() {
   
                       {/* Subjects */}
                       <div>
-                      {/* Subjects */}
-                      <div>
                         <div style={{ fontSize: '14px', color: '#4a3f35', fontWeight: 600, marginBottom: '8px' }}>מקצועות שהמורה מלמד/ת</div>
                         {!prefEditing ? (
                           prefData.subjects.length === 0 ? (
