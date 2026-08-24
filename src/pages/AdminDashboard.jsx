@@ -136,6 +136,9 @@ export default function AdminDashboard() {
   const [search, setSearch] = useState('');
   const [tilesExpanded, setTilesExpanded] = useState(false);
   const [prefTeacher, setPrefTeacher] = useState(null);
+  const [prefEditing, setPrefEditing] = useState(false);
+  const [prefDraft, setPrefDraft] = useState({});
+  const [prefSaving, setPrefSaving] = useState(false);
   const [showScheduleConfirm, setShowScheduleConfirm] = useState(false);
   const [prefData, setPrefData] = useState(null);
   const [prefLoading, setPrefLoading] = useState(false);
@@ -246,6 +249,42 @@ export default function AdminDashboard() {
     setFilterType('teacher');
     setSelectedValues([`${prefTeacher.first_name} ${prefTeacher.last_name}`]);
     setShowScheduleConfirm(false);
+  };
+
+    const startPrefEdit = () => {
+    setPrefDraft({
+      priority_early_finish: prefData.prefs?.priority_early_finish ? 1 : 0,
+      priority_no_gaps: prefData.prefs?.priority_no_gaps ? 1 : 0,
+      priority_free_day: prefData.prefs?.priority_free_day ? 1 : 0,
+      priority_consecutive: prefData.prefs?.priority_consecutive ? 1 : 0,
+    });
+    setPrefEditing(true);
+  };
+
+  const cancelPrefEdit = () => {
+    setPrefEditing(false);
+  };
+
+  const savePrefEdit = async () => {
+    setPrefSaving(true);
+    try {
+      const payload = {
+        min_hours: prefData.prefs?.min_hours ?? 18,
+        max_hours: prefData.prefs?.max_hours ?? 26,
+        preferred_consecutive: prefData.prefs?.preferred_consecutive ?? false,
+        priority_early_finish: prefDraft.priority_early_finish,
+        priority_no_gaps: prefDraft.priority_no_gaps,
+        priority_free_day: prefDraft.priority_free_day,
+        priority_consecutive: prefDraft.priority_consecutive,
+      };
+      const res = await saveTeacherPreferencesById(prefTeacher.id, payload);
+      setPrefData(prev => ({ ...prev, prefs: res.data }));
+      setPrefEditing(false);
+    } catch (err) {
+      alert('שמירת ההעדפות נכשלה. נסה/י שוב.');
+    } finally {
+      setPrefSaving(false);
+    }
   };
 
   const openTeacherPrefs = async (teacher) => {
@@ -711,15 +750,58 @@ export default function AdminDashboard() {
   
                       {/* Priority preferences */}
                       <div>
-                        <div style={{ fontSize: '14px', color: '#4a3f35', fontWeight: 600, marginBottom: '8px' }}>העדפות שיבוץ</div>
-                        {!prefData.prefs ? (
-                          <div style={{ fontSize: '13px', color: '#c8baa6' }}>לא הוגדרו העדפות</div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <div style={{ fontSize: '14px', color: '#4a3f35', fontWeight: 600 }}>העדפות שיבוץ</div>
+                          {!prefEditing ? (
+                            <button onClick={startPrefEdit} style={{ ...styles.btnOutline, fontSize: '12px', padding: '5px 12px' }}>
+                              <i className="ti ti-edit" aria-hidden="true"></i> ערוך
+                            </button>
+                          ) : (
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button onClick={savePrefEdit} disabled={prefSaving} style={{ backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '8px', padding: '5px 14px', fontSize: '12px', cursor: prefSaving ? 'default' : 'pointer', opacity: prefSaving ? 0.6 : 1 }}>
+                                {prefSaving ? 'שומר…' : 'שמור'}
+                              </button>
+                              <button onClick={cancelPrefEdit} disabled={prefSaving} style={{ ...styles.btnOutline, fontSize: '12px', padding: '5px 14px' }}>ביטול</button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Read-only hours facts (never editable by the principal) */}
+                        <div style={{ fontSize: '13px', color: '#8a7a6e', lineHeight: 1.8, marginBottom: prefEditing ? '14px' : '0' }}>
+                          <div>מכסת השעות של המורה: {prefTeacher.weekly_hours_quota ?? '—'}</div>
+                          {prefData.prefs && <div>טווח שעות מבוקש: {prefData.prefs.min_hours}–{prefData.prefs.max_hours}</div>}
+                        </div>
+
+                        {!prefEditing ? (
+                          !prefData.prefs ? (
+                            <div style={{ fontSize: '13px', color: '#c8baa6' }}>לא הוגדרו העדפות</div>
+                          ) : (
+                            <div style={{ fontSize: '13px', color: '#8a7a6e', lineHeight: 1.8 }}>
+                              <div>סיום מוקדם: {prefData.prefs.priority_early_finish ? 'מועדף' : 'ללא'}</div>
+                              <div>ללא חלונות: {prefData.prefs.priority_no_gaps ? 'מועדף' : 'ללא'}</div>
+                              <div>יום חופשי: {prefData.prefs.priority_free_day ? 'מועדף' : 'ללא'}</div>
+                              <div>שיעורים רצופים: {prefData.prefs.priority_consecutive ? 'מועדף' : 'ללא'}</div>
+                            </div>
+                          )
                         ) : (
-                          <div style={{ fontSize: '13px', color: '#8a7a6e', lineHeight: 1.8 }}>
-                            <div>סיום מוקדם: {prefData.prefs.priority_early_finish ? 'מועדף' : 'ללא'}</div>
-                            <div>ללא חלונות: {prefData.prefs.priority_no_gaps ? 'מועדף' : 'ללא'}</div>
-                            <div>יום חופשי: {prefData.prefs.priority_free_day ? 'מועדף' : 'ללא'}</div>
-                            <div>שעות: {prefData.prefs.min_hours}–{prefData.prefs.max_hours}</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {[
+                              { field: 'priority_early_finish', label: 'סיום מוקדם' },
+                              { field: 'priority_no_gaps', label: 'הימנעות מחלונות' },
+                              { field: 'priority_free_day', label: 'יום חופשי' },
+                              { field: 'priority_consecutive', label: 'שיעורים רצופים' },
+                            ].map(({ field, label }) => (
+                              <div key={field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: '320px' }}>
+                                <span style={{ fontSize: '13px', color: '#4a3f35' }}>{label}</span>
+                                <button
+                                  onClick={() => setPrefDraft(d => ({ ...d, [field]: d[field] ? 0 : 1 }))}
+                                  style={{ width: '52px', height: '28px', borderRadius: '20px', border: 'none', cursor: 'pointer', backgroundColor: prefDraft[field] ? '#8a9e78' : '#d8d0c4', position: 'relative', transition: 'background-color 0.15s' }}
+                                  aria-label={label}
+                                >
+                                  <span style={{ position: 'absolute', top: '3px', [prefDraft[field] ? 'left' : 'right']: '3px', width: '22px', height: '22px', borderRadius: '50%', backgroundColor: '#fff' }}></span>
+                                </button>
+                              </div>
+                            ))}
                           </div>
                         )}
                       </div>
