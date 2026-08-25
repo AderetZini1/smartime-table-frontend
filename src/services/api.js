@@ -98,6 +98,10 @@ export const removeTeacherSubjectById = (id, subjectId) => api.delete(`/teacher-
 export const addTeacherGradeLevelById = (id, gradeLevel) => api.post(`/teacher-grade-levels/for-teacher/${id}/${gradeLevel}`);
 export const removeTeacherGradeLevelById = (id, gradeLevel) => api.delete(`/teacher-grade-levels/for-teacher/${id}/${gradeLevel}`);
 export const saveTeacherHomeroomById = (id, data) => api.post(`/teacher-homeroom-prefs/for-teacher/${id}`, data);
+// Schedule runs history (port 8000)
+export const getScheduleRuns = () => api.get('/schedule-runs/');
+export const selectScheduleRun = (id) => api.patch(`/schedule-runs/${id}/select`);
+export const deleteScheduleRun = (id) => api.delete(`/schedule-runs/${id}`);
 
 export const getViolations = () => api2.get('/schedule/violations');
 
