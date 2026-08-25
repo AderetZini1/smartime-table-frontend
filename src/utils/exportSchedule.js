@@ -24,17 +24,18 @@ function safeSheetName(name, fallback) {
 }
 
 // subject / class / room, each on its own line; two lessons split by divider.
-function cellText(entries, showGroup) {
+function cellText(entries, showGroup, showTeacher) {
   if (entries.length === 0) return '';
   return entries.map(e => {
     const lines = [e.subject_name];
     if (showGroup && e.group_name) lines.push(e.group_name);
+    if (showTeacher && (e.teacher_first_name || e.teacher_last_name)) lines.push(`${e.teacher_first_name || ''} ${e.teacher_last_name || ''}`.trim());
     if (e.room_name) lines.push(e.room_name);
     return lines.join('\n');
   }).join('\n\u2014\u2014\u2014\n');
 }
 
-function buildSheet(wb, sheetName, entries, showGroup) {
+function buildSheet(wb, sheetName, entries, showGroup, showTeacher) {
   const ws = wb.addWorksheet(safeSheetName(sheetName, 'מערכת'), {
     views: [{ rightToLeft: true }],
   });
@@ -57,7 +58,7 @@ function buildSheet(wb, sheetName, entries, showGroup) {
     const rowValues = ['שיעור ' + hour];
     for (const day of DAYS) {
       const slot = entries.filter(e => e.day_of_week === day.num && e.hour_of_day === hour);
-      rowValues.push(cellText(slot, showGroup));
+      rowValues.push(cellText(slot, showGroup, showTeacher));
     }
     const row = ws.addRow(rowValues);
     row.height = 58;
@@ -89,15 +90,15 @@ async function download(wb, fileName) {
 }
 
 /** Export a SINGLE schedule (one grid) to an .xlsx file. */
-export async function exportSingleSchedule(entries, { fileName = 'מערכת_שעות', sheetName = 'מערכת', showGroup = true } = {}) {
+export async function exportSingleSchedule(entries, { fileName = 'מערכת_שעות', sheetName = 'מערכת', showGroup = true, showTeacher = true } = {}) {
   const wb = new ExcelJS.Workbook();
-  buildSheet(wb, sheetName, entries, showGroup);
+  buildSheet(wb, sheetName, entries, showGroup, showTeacher);
   await download(wb, fileName);
 }
 
 /** Export MULTIPLE schedules, each on its own sheet (tab), in one file. */
-export async function exportMultiSchedule(groups, { fileName = 'מערכות_שעות', showGroup = true } = {}) {
+export async function exportMultiSchedule(groups, { fileName = 'מערכות_שעות', showGroup = true, showTeacher = true } = {}) {
   const wb = new ExcelJS.Workbook();
-  groups.forEach((g, i) => buildSheet(wb, g.name || ('גיליון ' + (i + 1)), g.entries, showGroup));
+  groups.forEach((g, i) => buildSheet(wb, g.name || ('גיליון ' + (i + 1)), g.entries, showGroup, showTeacher));
   await download(wb, fileName);
 }
