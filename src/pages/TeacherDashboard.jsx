@@ -334,8 +334,16 @@ export default function TeacherDashboard() {
   };
 
   const profileDirty = JSON.stringify(profile) !== JSON.stringify(profileBaseline);
+  const [profileErrors, setProfileErrors] = useState({ first_name: false, last_name: false });
 
   const handleSaveProfile = async () => {
+    const fn = profile.first_name.trim();
+    const ln = profile.last_name.trim();
+    if (!fn || !ln) {
+      setProfileErrors({ first_name: !fn, last_name: !ln });
+      return;
+    }
+    setProfileErrors({ first_name: false, last_name: false });
     try {
       await updateTeacher(user.id, {
         first_name: profile.first_name,
@@ -467,11 +475,13 @@ export default function TeacherDashboard() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
               <div>
                 <label style={styles.label}>שם פרטי</label>
-                <input style={styles.input} value={profile.first_name} onChange={e => setProfile(p => ({ ...p, first_name: e.target.value }))} />
+                <input style={{ ...styles.input, borderColor: profileErrors.first_name ? '#c0705a' : undefined, backgroundColor: profileErrors.first_name ? '#fff8f6' : undefined }} value={profile.first_name} onChange={e => { setProfile(p => ({ ...p, first_name: e.target.value })); if (profileErrors.first_name) setProfileErrors(p => ({ ...p, first_name: false })); }} />
+                {profileErrors.first_name && <div style={{ fontSize: '11px', color: '#c0705a', marginTop: '4px' }}>נא להזין שם פרטי</div>}
               </div>
               <div>
                 <label style={styles.label}>שם משפחה</label>
-                <input style={styles.input} value={profile.last_name} onChange={e => setProfile(p => ({ ...p, last_name: e.target.value }))} />
+                <input style={{ ...styles.input, borderColor: profileErrors.last_name ? '#c0705a' : undefined, backgroundColor: profileErrors.last_name ? '#fff8f6' : undefined }} value={profile.last_name} onChange={e => { setProfile(p => ({ ...p, last_name: e.target.value })); if (profileErrors.last_name) setProfileErrors(p => ({ ...p, last_name: false })); }} />
+                {profileErrors.last_name && <div style={{ fontSize: '11px', color: '#c0705a', marginTop: '4px' }}>נא להזין שם משפחה</div>}
               </div>
             </div>
             <div style={{ marginBottom: '16px' }}>
