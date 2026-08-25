@@ -785,9 +785,9 @@ export default function AdminDashboard() {
                             <button onClick={cancelNoteEdit} disabled={savingNote} style={{ ...styles.btnOutline, padding: '6px 10px', fontSize: '12px' }}>ביטול</button>
                           </div>
                         ) : run.admin_note ? (
-                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                            <span style={{ fontSize: '13px', color: '#4a3f35', overflowWrap: 'anywhere', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{run.admin_note}</span>
-                            <i className="ti ti-pencil" onClick={() => startNoteEdit(run)} style={{ ...styles.iconBtn, fontSize: '15px' }} aria-hidden="true"></i>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '13px', color: '#4a3f35', overflowWrap: 'anywhere', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', flex: 1 }}>{run.admin_note}</span>
+                            <i className="ti ti-pencil" onClick={() => startNoteEdit(run)} style={{ ...styles.iconBtn, fontSize: '15px', flexShrink: 0 }} aria-hidden="true"></i>
                           </div>
                         ) : (
                           <button onClick={() => startNoteEdit(run)} style={{ ...styles.btnOutline, padding: '4px 10px', fontSize: '12px' }}>
