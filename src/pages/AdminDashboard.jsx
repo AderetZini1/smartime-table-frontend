@@ -127,6 +127,8 @@ export default function AdminDashboard() {
   const [runsLoading, setRunsLoading] = useState(false);
   const [confirmSelectRun, setConfirmSelectRun] = useState(null);
   const [selectingRun, setSelectingRun] = useState(false);
+  const [confirmDeleteRun, setConfirmDeleteRun] = useState(null);
+  const [deletingRun, setDeletingRun] = useState(false);
   const [historyMsg, setHistoryMsg] = useState('');
   const [genError, setGenError] = useState('');
   const [publishMsg, setPublishMsg] = useState('');
@@ -379,6 +381,22 @@ export default function AdminDashboard() {
       else delete next[timeslotId];                  // hard -> blank
       return next;
     });
+  };
+
+  const handleDeleteRun = async () => {
+    if (!confirmDeleteRun) return;
+    setDeletingRun(true);
+    try {
+      await deleteScheduleRun(confirmDeleteRun.id);
+      setRuns(prev => prev.filter(r => r.id !== confirmDeleteRun.id));
+      setConfirmDeleteRun(null);
+      setHistoryMsg('המערכת נמחקה מההיסטוריה.');
+      setTimeout(() => setHistoryMsg(''), 4000);
+    } catch (err) {
+      alert('מחיקת המערכת נכשלה. ייתכן שזו המערכת הנוכחית או המפורסמת.');
+    } finally {
+      setDeletingRun(false);
+    }
   };
 
   const handleSelectRun = async () => {
@@ -674,6 +692,18 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {confirmDeleteRun && (
+          <div onClick={() => setConfirmDeleteRun(null)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+            <div onClick={e => e.stopPropagation()} style={{ backgroundColor: '#FAF7F2', border: '1px solid #e2dacc', borderRadius: '14px', padding: '24px', width: '90%', maxWidth: '400px', boxShadow: '0 10px 30px rgba(0,0,0,0.15)' }}>
+              <p style={{ margin: '0 0 20px 0', fontSize: '15px', color: '#4a3f35', lineHeight: 1.6 }}>למחוק מערכת זו מההיסטוריה? לא ניתן לשחזר פעולה זו.</p>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-start' }}>
+                <button onClick={handleDeleteRun} disabled={deletingRun} style={{ backgroundColor: '#c0705a', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '14px', cursor: deletingRun ? 'default' : 'pointer', opacity: deletingRun ? 0.6 : 1 }}>{deletingRun ? 'מוחק…' : 'מחק'}</button>
+                <button onClick={() => setConfirmDeleteRun(null)} disabled={deletingRun} style={{ ...styles.btnOutline, padding: '9px 18px', fontSize: '14px' }}>ביטול</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {confirmSelectRun && (
           <div onClick={() => setConfirmSelectRun(null)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
             <div onClick={e => e.stopPropagation()} style={{ backgroundColor: '#FAF7F2', border: '1px solid #e2dacc', borderRadius: '14px', padding: '24px', width: '90%', maxWidth: '420px', boxShadow: '0 10px 30px rgba(0,0,0,0.15)' }}>
@@ -710,6 +740,16 @@ export default function AdminDashboard() {
                       <div style={{ flex: 2, display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                         {run.is_selected && <span style={{ ...styles.badge, backgroundColor: '#EDF4E8', color: '#6b8f5e' }}>נוכחית</span>}
                         {run.is_published && <span style={{ ...styles.badge, backgroundColor: '#E8F2FA', color: '#5a8ac0' }}>פורסם</span>}
+                      </div>
+                      <div style={{ width: '40px', display: 'flex', justifyContent: 'flex-end' }}>
+                        {!run.is_selected && !run.is_published && (
+                          <i
+                            className="ti ti-trash"
+                            onClick={(e) => { e.stopPropagation(); setConfirmDeleteRun(run); }}
+                            style={styles.iconBtn}
+                            aria-hidden="true"
+                          ></i>
+                        )}
                       </div>
                     </div>
                   );
