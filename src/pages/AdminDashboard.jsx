@@ -654,9 +654,9 @@ export default function AdminDashboard() {
         const groups = selectedValues.map(val => ({ name: String(val), entries: entriesFor(val) }));
         const showTeacherCur = filterType !== 'teacher';
         if (format === 'pdf') {
-          await exportMultiPDF(groups, { fileName: 'מערכת_נבחרת', showGroup: filterType !== 'class' });
+          await exportMultiPDF(groups, { fileName: 'מערכת_נבחרת', showGroup: filterType !== 'class', showTeacher: showTeacherCur });
         } else {
-          await exportMultiSchedule(groups, { fileName: 'מערכת_נבחרת', showGroup: filterType !== 'class' });
+          await exportMultiSchedule(groups, { fileName: 'מערכת_נבחרת', showGroup: filterType !== 'class', showTeacher: showTeacherCur });
         }
         closeExport();
       }
