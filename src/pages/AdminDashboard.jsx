@@ -105,6 +105,7 @@ export default function AdminDashboard() {
   const [respondModal, setRespondModal] = useState(null);
   const [response, setResponse] = useState({ status: 'approved', admin_response: '' });
   const [newWindow, setNewWindow] = useState({ title: '', start_date: '', end_date: '' });
+  const [windowErrors, setWindowErrors] = useState({ title: false, start_date: false, end_date: false });
   const [pendingCount, setPendingCount] = useState(0);
   const [confirmModal, setConfirmModal] = useState(null);
   const [editModal, setEditModal] = useState(null);
@@ -491,7 +492,18 @@ export default function AdminDashboard() {
   };
 
   const handleCreateWindow = async () => {
-    if (!newWindow.title || !newWindow.start_date || !newWindow.end_date) return;
+    const errs = {
+      title: !newWindow.title.trim(),
+      start_date: !newWindow.start_date,
+      end_date: !newWindow.end_date,
+    };
+    if (errs.title || errs.start_date || errs.end_date) { setWindowErrors(errs); return; }
+    if (new Date(newWindow.end_date) <= new Date(newWindow.start_date)) {
+      setWindowErrors({ title: false, start_date: false, end_date: true });
+      alert('תאריך הסגירה חייב להיות אחרי תאריך הפתיחה.');
+      return;
+    }
+    setWindowErrors({ title: false, start_date: false, end_date: false });
     try {
       const res = await createSubmissionWindow(newWindow);
       setWindows(prev => [...prev, res.data]);
@@ -856,15 +868,18 @@ export default function AdminDashboard() {
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
                   <label style={styles.label}>כותרת</label>
-                  <input style={styles.input} value={newWindow.title} onChange={e => setNewWindow({ ...newWindow, title: e.target.value })} placeholder='העדפות מחצית א׳' />
+                  <input style={{ ...styles.input, borderColor: windowErrors.title ? '#c0705a' : undefined, backgroundColor: windowErrors.title ? '#fff8f6' : undefined }} value={newWindow.title} onChange={e => { setNewWindow({ ...newWindow, title: e.target.value }); if (windowErrors.title) setWindowErrors(p => ({ ...p, title: false })); }} placeholder='העדפות מחצית א׳' />
+                  {windowErrors.title && <div style={{ fontSize: '11px', color: '#c0705a', marginTop: '4px' }}>נא להזין כותרת</div>}
                 </div>
                 <div>
                   <label style={styles.label}>תאריך פתיחה</label>
-                  <input type="datetime-local" style={styles.input} value={newWindow.start_date} onChange={e => setNewWindow({ ...newWindow, start_date: e.target.value })} />
+                  <input type="datetime-local" style={{ ...styles.input, borderColor: windowErrors.start_date ? '#c0705a' : undefined, backgroundColor: windowErrors.start_date ? '#fff8f6' : undefined }} value={newWindow.start_date} onChange={e => { setNewWindow({ ...newWindow, start_date: e.target.value }); if (windowErrors.start_date) setWindowErrors(p => ({ ...p, start_date: false })); }} />
+                  {windowErrors.start_date && <div style={{ fontSize: '11px', color: '#c0705a', marginTop: '4px' }}>נא לבחור תאריך פתיחה</div>}
                 </div>
                 <div>
                   <label style={styles.label}>תאריך סגירה</label>
-                  <input type="datetime-local" style={styles.input} value={newWindow.end_date} onChange={e => setNewWindow({ ...newWindow, end_date: e.target.value })} />
+                  <input type="datetime-local" style={{ ...styles.input, borderColor: windowErrors.end_date ? '#c0705a' : undefined, backgroundColor: windowErrors.end_date ? '#fff8f6' : undefined }} value={newWindow.end_date} onChange={e => { setNewWindow({ ...newWindow, end_date: e.target.value }); if (windowErrors.end_date) setWindowErrors(p => ({ ...p, end_date: false })); }} />
+                  {windowErrors.end_date && <div style={{ fontSize: '11px', color: '#c0705a', marginTop: '4px' }}>נא לבחור תאריך סגירה</div>}
                 </div>
               </div>
               <button onClick={handleCreateWindow} style={styles.btnAdd}>
