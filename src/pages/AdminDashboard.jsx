@@ -618,22 +618,24 @@ export default function AdminDashboard() {
   // Export ONE value (single sheet).
   const exportOneValue = async (dim, val, format = 'excel') => {
     const showGroup = dim !== 'class';
+    const showTeacher = dim !== 'teacher';
     const entries = entriesForDim(dim, val);
     if (format === 'pdf') {
-      await exportSinglePDF(entries, { fileName: `מערכת_${DIM_LABEL[dim]}_${val}`, title: String(val), showGroup });
+      await exportSinglePDF(entries, { fileName: `מערכת_${DIM_LABEL[dim]}_${val}`, title: String(val), showGroup, showTeacher });
     } else {
-      await exportSingleSchedule(entries, { fileName: `מערכת_${DIM_LABEL[dim]}_${val}`, sheetName: String(val), showGroup });
+      await exportSingleSchedule(entries, { fileName: `מערכת_${DIM_LABEL[dim]}_${val}`, sheetName: String(val), showGroup, showTeacher });
     }
     closeExport();
   };
 
   const exportAllOfDim = async (dim, format = 'excel') => {
     const showGroup = dim !== 'class';
+    const showTeacher = dim !== 'teacher';
     const groups = valuesForDim(dim).map(val => ({ name: String(val), entries: entriesForDim(dim, val) }));
     if (format === 'pdf') {
-      await exportMultiPDF(groups, { fileName: `מערכות_לפי_${DIM_LABEL[dim]}`, showGroup });
+      await exportMultiPDF(groups, { fileName: `מערכות_לפי_${DIM_LABEL[dim]}`, showGroup, showTeacher });
     } else {
-      await exportMultiSchedule(groups, { fileName: `מערכות_לפי_${DIM_LABEL[dim]}`, showGroup });
+      await exportMultiSchedule(groups, { fileName: `מערכות_לפי_${DIM_LABEL[dim]}`, showGroup, showTeacher });
     }
     closeExport();
   };
