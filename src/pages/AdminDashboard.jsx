@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher, getMyConstraints, getTeacherPreferencesById, getTeacherSubjectsById, getTeacherGradeLevelsById, getTeacherHomeroomById, saveTeacherPreferencesById, addTeacherSubjectById, removeTeacherSubjectById, addTeacherGradeLevelById, removeTeacherGradeLevelById, saveTeacherHomeroomById, createConstraint, deleteConstraint } from '../services/api';
+import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher, getMyConstraints, getTeacherPreferencesById, getTeacherSubjectsById, getTeacherGradeLevelsById, getTeacherHomeroomById, saveTeacherPreferencesById, addTeacherSubjectById, removeTeacherSubjectById, addTeacherGradeLevelById, removeTeacherGradeLevelById, saveTeacherHomeroomById, createConstraint, deleteConstraint, getScheduleRuns, selectScheduleRun, deleteScheduleRun } from '../services/api';
 import AddTeacherModal from '../components/AddTeacherModal';
 import EditModal from '../components/EditModal';
 import AddRoomModal from '../components/AddRoomModal';
@@ -22,6 +22,7 @@ function fmtDate(iso) {
 
 const TABS = [
   { id: 'schedule', label: 'מערכת שעות', icon: 'ti-calendar' },
+  { id: 'history', label: 'היסטוריית מערכות', icon: 'ti-history' },
   { id: 'requests', label: 'פניות מורים', icon: 'ti-message' },
   { id: 'teacherprefs', label: 'העדפות מורים', icon: 'ti-clipboard-text' },
   { id: 'windows', label: 'חלונות הגשה', icon: 'ti-calendar-event' },
@@ -122,6 +123,8 @@ export default function AdminDashboard() {
   const [runInfo, setRunInfo] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [runs, setRuns] = useState([]);
+  const [runsLoading, setRunsLoading] = useState(false);
   const [genError, setGenError] = useState('');
   const [publishMsg, setPublishMsg] = useState('');
   const [violations, setViolations] = useState(null);
@@ -155,6 +158,7 @@ export default function AdminDashboard() {
     if (activeTab === 'subjects') { getRooms().then(r => setRooms(r.data)); getSubjects().then(r => setSubjects(r.data)); }
     if (activeTab === 'groups') { getRooms().then(r => setRooms(r.data)); getStudentGroups().then(r => setGroups(r.data)); }
     if (activeTab === 'schedule') { getStudentGroups().then(r => setGroups(r.data)); loadSchedule(); }
+    if (activeTab === 'history') { setRunsLoading(true); getScheduleRuns().then(r => setRuns(r.data)).catch(() => {}).finally(() => setRunsLoading(false)); }
     if (activeTab === 'requests') getMyRequests().then(r => { setRequests(r.data); setPendingCount(r.data.filter(x => x.status === 'pending').length); });
     if (activeTab === 'windows') getSubmissionWindows().then(r => setWindows(r.data));
     if (activeTab === 'teacherprefs') {
@@ -644,6 +648,39 @@ export default function AdminDashboard() {
             </button>
           )}
         </div>
+
+        {activeTab === 'history' && (
+          <div style={styles.card}>
+            {runsLoading ? (
+              <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px' }}>טוען…</div>
+            ) : runs.length === 0 ? (
+              <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px', fontSize: '14px' }}>אין מערכות שמורות עדיין</div>
+            ) : (
+              <>
+                <div style={styles.tableHeader}>
+                  <div style={{ flex: 2 }}>תאריך</div>
+                  <div style={{ flex: 2 }}>אלגוריתם</div>
+                  <div style={{ flex: 1 }}>ציון</div>
+                  <div style={{ flex: 2 }}>סטטוס</div>
+                </div>
+                {runs.slice(0, 20).map((run, i, arr) => {
+                  const algoLabels = { CSP: 'CSP', HILL_CLIMBING: 'טיפוס גבעות', GENETIC: 'גנטי' };
+                  return (
+                    <div key={run.id} style={{ ...styles.tableRow, borderBottom: i < arr.length - 1 ? '1px solid #f0ebe3' : 'none' }}>
+                      <div style={{ flex: 2, color: '#8a7a6e' }}>{run.run_at ? new Date(run.run_at).toLocaleString('he-IL') : '—'}</div>
+                      <div style={{ flex: 2 }}>{algoLabels[run.algorithm] || run.algorithm}</div>
+                      <div style={{ flex: 1 }}>{run.score ?? '—'}</div>
+                      <div style={{ flex: 2, display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                        {run.is_selected && <span style={{ ...styles.badge, backgroundColor: '#EDF4E8', color: '#6b8f5e' }}>נוכחית</span>}
+                        {run.is_published && <span style={{ ...styles.badge, backgroundColor: '#E8F2FA', color: '#5a8ac0' }}>פורסם</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        )}
 
         {activeTab === 'requests' && (
           <div style={styles.card}>
