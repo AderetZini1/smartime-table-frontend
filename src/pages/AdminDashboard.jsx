@@ -652,6 +652,7 @@ export default function AdminDashboard() {
         await exportOneValue(filterType, selectedValues[0], format);
       } else {
         const groups = selectedValues.map(val => ({ name: String(val), entries: entriesFor(val) }));
+        const showTeacherCur = filterType !== 'teacher';
         if (format === 'pdf') {
           await exportMultiPDF(groups, { fileName: 'מערכת_נבחרת', showGroup: filterType !== 'class' });
         } else {
