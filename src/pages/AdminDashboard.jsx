@@ -125,6 +125,9 @@ export default function AdminDashboard() {
   const [publishing, setPublishing] = useState(false);
   const [runs, setRuns] = useState([]);
   const [runsLoading, setRunsLoading] = useState(false);
+  const [confirmSelectRun, setConfirmSelectRun] = useState(null);
+  const [selectingRun, setSelectingRun] = useState(false);
+  const [historyMsg, setHistoryMsg] = useState('');
   const [genError, setGenError] = useState('');
   const [publishMsg, setPublishMsg] = useState('');
   const [violations, setViolations] = useState(null);
@@ -376,6 +379,22 @@ export default function AdminDashboard() {
       else delete next[timeslotId];                  // hard -> blank
       return next;
     });
+  };
+
+  const handleSelectRun = async () => {
+    if (!confirmSelectRun) return;
+    setSelectingRun(true);
+    try {
+      await selectScheduleRun(confirmSelectRun.id);
+      setConfirmSelectRun(null);
+      setActiveTab('schedule');
+      setHistoryMsg('המערכת הנבחרת עודכנה. ניתן לצפות בה כעת ולפרסם לצוות.');
+      setTimeout(() => setHistoryMsg(''), 5000);
+    } catch (err) {
+      alert('עדכון המערכת נכשל. נסה/י שוב.');
+    } finally {
+      setSelectingRun(false);
+    }
   };
 
   const openTeacherPrefs = async (teacher) => {
@@ -649,6 +668,24 @@ export default function AdminDashboard() {
           )}
         </div>
 
+        {historyMsg && (
+          <div style={{ position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#6b8f5e', color: '#fff', padding: '12px 24px', borderRadius: '10px', fontSize: '14px', boxShadow: '0 6px 20px rgba(0,0,0,0.15)', zIndex: 9999 }}>
+            {historyMsg}
+          </div>
+        )}
+
+        {confirmSelectRun && (
+          <div onClick={() => setConfirmSelectRun(null)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+            <div onClick={e => e.stopPropagation()} style={{ backgroundColor: '#FAF7F2', border: '1px solid #e2dacc', borderRadius: '14px', padding: '24px', width: '90%', maxWidth: '420px', boxShadow: '0 10px 30px rgba(0,0,0,0.15)' }}>
+              <p style={{ margin: '0 0 20px 0', fontSize: '15px', color: '#4a3f35', lineHeight: 1.6 }}>להחליף למערכת זו? המערכת הנבחרת הנוכחית תוחלף. הפרסום לצוות לא ישתנה עד שתפרסמ/י מחדש.</p>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-start' }}>
+                <button onClick={handleSelectRun} disabled={selectingRun} style={{ backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '14px', cursor: selectingRun ? 'default' : 'pointer', opacity: selectingRun ? 0.6 : 1 }}>{selectingRun ? 'מעדכן…' : 'אישור'}</button>
+                <button onClick={() => setConfirmSelectRun(null)} disabled={selectingRun} style={{ ...styles.btnOutline, padding: '9px 18px', fontSize: '14px' }}>ביטול</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'history' && (
           <div style={styles.card}>
             {runsLoading ? (
@@ -666,7 +703,7 @@ export default function AdminDashboard() {
                 {runs.slice(0, 20).map((run, i, arr) => {
                   const algoLabels = { CSP: 'CSP', HILL_CLIMBING: 'טיפוס גבעות', GENETIC: 'גנטי' };
                   return (
-                    <div key={run.id} style={{ ...styles.tableRow, borderBottom: i < arr.length - 1 ? '1px solid #f0ebe3' : 'none' }}>
+                    <div key={run.id} onClick={() => setConfirmSelectRun(run)} style={{ ...styles.tableRow, borderBottom: i < arr.length - 1 ? '1px solid #f0ebe3' : 'none', cursor: 'pointer' }}>
                       <div style={{ flex: 2, color: '#8a7a6e' }}>{run.run_at ? new Date(run.run_at).toLocaleString('he-IL') : '—'}</div>
                       <div style={{ flex: 2 }}>{algoLabels[run.algorithm] || run.algorithm}</div>
                       <div style={{ flex: 1 }}>{run.score ?? '—'}</div>
