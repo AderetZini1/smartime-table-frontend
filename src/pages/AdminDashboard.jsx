@@ -770,13 +770,13 @@ export default function AdminDashboard() {
                         {run.is_selected && <span style={{ ...styles.badge, backgroundColor: '#EDF4E8', color: '#6b8f5e' }}>נוכחית</span>}
                         {run.is_published && <span style={{ ...styles.badge, backgroundColor: '#E8F2FA', color: '#5a8ac0' }}>פורסם</span>}
                       </div>
-                      <div style={{ flex: 2 }} onClick={(e) => e.stopPropagation()}>
+                      <div style={{ flex: 2, minWidth: 0 }} onClick={(e) => e.stopPropagation()}>
                         {editingNoteId === run.id ? (
                           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                             <input
                               value={noteDraft}
                               onChange={e => setNoteDraft(e.target.value)}
-                              maxLength={255}
+                              maxLength={150}
                               placeholder="הערה…"
                               style={{ ...styles.input, padding: '6px 10px', fontSize: '13px', flex: 1 }}
                               autoFocus
@@ -786,7 +786,7 @@ export default function AdminDashboard() {
                           </div>
                         ) : run.admin_note ? (
                           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                            <span style={{ fontSize: '13px', color: '#4a3f35' }}>{run.admin_note}</span>
+                            <span style={{ fontSize: '13px', color: '#4a3f35', overflowWrap: 'anywhere', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{run.admin_note}</span>
                             <i className="ti ti-pencil" onClick={() => startNoteEdit(run)} style={{ ...styles.iconBtn, fontSize: '15px' }} aria-hidden="true"></i>
                           </div>
                         ) : (
