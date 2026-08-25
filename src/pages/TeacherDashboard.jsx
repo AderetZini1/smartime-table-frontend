@@ -143,6 +143,7 @@ export default function TeacherDashboard() {
   const [windowLoaded, setWindowLoaded] = useState(false);
   const [requests, setRequests] = useState([]);
   const [newRequest, setNewRequest] = useState({ request_type: 'constraint_change', description: '' });
+  const [requestError, setRequestError] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
   const [profile, setProfile] = useState({ first_name: '', last_name: '', email: '', phone_number: '' });
   const [profileBaseline, setProfileBaseline] = useState({ first_name: '', last_name: '', email: '', phone_number: '' });
@@ -320,7 +321,8 @@ export default function TeacherDashboard() {
   };
   
   const handleSendRequest = async () => {
-    if (!newRequest.description.trim()) return;
+    if (!newRequest.description.trim()) { setRequestError(true); return; }
+    setRequestError(false);
     await createRequest(newRequest);
     setRequestSent(true);
     setNewRequest({ request_type: 'constraint_change', description: '' });
@@ -753,7 +755,8 @@ export default function TeacherDashboard() {
               </div>
               <div style={{ marginBottom: '16px' }}>
                 <label style={styles.label}>תיאור הפנייה</label>
-                <textarea value={newRequest.description} onChange={e => setNewRequest({ ...newRequest, description: e.target.value })} style={{ ...styles.input, height: '100px', resize: 'vertical' }} placeholder="תאר את הבקשה שלך..." />
+                <textarea value={newRequest.description} onChange={e => { setNewRequest({ ...newRequest, description: e.target.value }); if (requestError) setRequestError(false); }} style={{ ...styles.input, height: '100px', resize: 'vertical', borderColor: requestError ? '#c0705a' : undefined, backgroundColor: requestError ? '#fff8f6' : undefined }} placeholder="תאר את הבקשה שלך..." />
+                {requestError && <div style={{ fontSize: '11px', color: '#c0705a', marginTop: '4px' }}>נא להזין תיאור פנייה</div>}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <button onClick={handleSendRequest} style={styles.btnSave}>שלח פנייה</button>
