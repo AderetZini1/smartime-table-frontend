@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher, getMyConstraints, getTeacherPreferencesById, getTeacherSubjectsById, getTeacherGradeLevelsById, getTeacherHomeroomById, saveTeacherPreferencesById, addTeacherSubjectById, removeTeacherSubjectById, addTeacherGradeLevelById, removeTeacherGradeLevelById, saveTeacherHomeroomById, createConstraint, deleteConstraint, getScheduleRuns, selectScheduleRun, deleteScheduleRun } from '../services/api';
+import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher, getMyConstraints, getTeacherPreferencesById, getTeacherSubjectsById, getTeacherGradeLevelsById, getTeacherHomeroomById, saveTeacherPreferencesById, addTeacherSubjectById, removeTeacherSubjectById, addTeacherGradeLevelById, removeTeacherGradeLevelById, saveTeacherHomeroomById, createConstraint, deleteConstraint, getScheduleRuns, selectScheduleRun, deleteScheduleRun, updateScheduleRunNote } from '../services/api';
 import AddTeacherModal from '../components/AddTeacherModal';
 import EditModal from '../components/EditModal';
 import AddRoomModal from '../components/AddRoomModal';
@@ -129,6 +129,9 @@ export default function AdminDashboard() {
   const [selectingRun, setSelectingRun] = useState(false);
   const [confirmDeleteRun, setConfirmDeleteRun] = useState(null);
   const [deletingRun, setDeletingRun] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState(null);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
   const [historyMsg, setHistoryMsg] = useState('');
   const [genError, setGenError] = useState('');
   const [publishMsg, setPublishMsg] = useState('');
@@ -381,6 +384,30 @@ export default function AdminDashboard() {
       else delete next[timeslotId];                  // hard -> blank
       return next;
     });
+  };
+
+  const startNoteEdit = (run) => {
+    setEditingNoteId(run.id);
+    setNoteDraft(run.admin_note || '');
+  };
+
+  const cancelNoteEdit = () => {
+    setEditingNoteId(null);
+    setNoteDraft('');
+  };
+
+  const saveNote = async (runId) => {
+    setSavingNote(true);
+    try {
+      const res = await updateScheduleRunNote(runId, noteDraft.trim());
+      setRuns(prev => prev.map(r => r.id === runId ? { ...r, admin_note: res.data.admin_note } : r));
+      setEditingNoteId(null);
+      setNoteDraft('');
+    } catch (err) {
+      alert('שמירת ההערה נכשלה. נסה/י שוב.');
+    } finally {
+      setSavingNote(false);
+    }
   };
 
   const handleDeleteRun = async () => {
@@ -729,6 +756,8 @@ export default function AdminDashboard() {
                   <div style={{ flex: 2 }}>אלגוריתם</div>
                   <div style={{ flex: 1 }}>ציון</div>
                   <div style={{ flex: 2 }}>סטטוס</div>
+                  <div style={{ flex: 2 }}>הערות</div>
+                  <div style={{ width: '40px' }}></div>
                 </div>
                 {runs.slice(0, 20).map((run, i, arr) => {
                   const algoLabels = { CSP: 'CSP', HILL_CLIMBING: 'טיפוס גבעות', GENETIC: 'גנטי' };
@@ -740,6 +769,31 @@ export default function AdminDashboard() {
                       <div style={{ flex: 2, display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                         {run.is_selected && <span style={{ ...styles.badge, backgroundColor: '#EDF4E8', color: '#6b8f5e' }}>נוכחית</span>}
                         {run.is_published && <span style={{ ...styles.badge, backgroundColor: '#E8F2FA', color: '#5a8ac0' }}>פורסם</span>}
+                      </div>
+                      <div style={{ flex: 2 }} onClick={(e) => e.stopPropagation()}>
+                        {editingNoteId === run.id ? (
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            <input
+                              value={noteDraft}
+                              onChange={e => setNoteDraft(e.target.value)}
+                              maxLength={255}
+                              placeholder="הערה…"
+                              style={{ ...styles.input, padding: '6px 10px', fontSize: '13px', flex: 1 }}
+                              autoFocus
+                            />
+                            <button onClick={() => saveNote(run.id)} disabled={savingNote} style={{ backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 10px', fontSize: '12px', cursor: 'pointer' }}>{savingNote ? '…' : 'שמור'}</button>
+                            <button onClick={cancelNoteEdit} disabled={savingNote} style={{ ...styles.btnOutline, padding: '6px 10px', fontSize: '12px' }}>ביטול</button>
+                          </div>
+                        ) : run.admin_note ? (
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            <span style={{ fontSize: '13px', color: '#4a3f35' }}>{run.admin_note}</span>
+                            <i className="ti ti-pencil" onClick={() => startNoteEdit(run)} style={{ ...styles.iconBtn, fontSize: '15px' }} aria-hidden="true"></i>
+                          </div>
+                        ) : (
+                          <button onClick={() => startNoteEdit(run)} style={{ ...styles.btnOutline, padding: '4px 10px', fontSize: '12px' }}>
+                            <i className="ti ti-plus" aria-hidden="true"></i> הוסף הערה
+                          </button>
+                        )}
                       </div>
                       <div style={{ width: '40px', display: 'flex', justifyContent: 'flex-end' }}>
                         {!run.is_selected && !run.is_published && (
