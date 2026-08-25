@@ -102,6 +102,7 @@ export const saveTeacherHomeroomById = (id, data) => api.post(`/teacher-homeroom
 export const getScheduleRuns = () => api.get('/schedule-runs/');
 export const selectScheduleRun = (id) => api.patch(`/schedule-runs/${id}/select`);
 export const deleteScheduleRun = (id) => api.delete(`/schedule-runs/${id}`);
+export const updateScheduleRunNote = (id, note) => api.patch(`/schedule-runs/${id}/note`, { admin_note: note });
 
 export const getViolations = () => api2.get('/schedule/violations');
 
