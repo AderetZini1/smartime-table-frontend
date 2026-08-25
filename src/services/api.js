@@ -16,6 +16,21 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Fire a one-time "session expired" event on 401 — but only if we HAD a token
+// (so a normal failed login, where no token is stored yet, doesn't trigger it).
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401 && localStorage.getItem('token')) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('token8001');
+      window.dispatchEvent(new Event('session-expired'));
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Auth
 export const login = (username, password) => {
   const formData = new FormData();
@@ -101,6 +116,18 @@ api2.interceptors.request.use((config) => {
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
+
+api2.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401 && localStorage.getItem('token')) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('token8001');
+      window.dispatchEvent(new Event('session-expired'));
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Silent login to 8001 (same ID + password as 8000). Stores its token.
 export const login8001 = (username, password) =>
