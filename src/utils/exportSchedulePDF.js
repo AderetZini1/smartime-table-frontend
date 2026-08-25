@@ -17,7 +17,7 @@ const TEXT = '#4a3f35';
 const BORDER = '#e2dacc';
 
 // Build an off-screen HTML table for one schedule, styled + RTL.
-function buildScheduleElement(title, entries, showGroup) {
+function buildScheduleElement(title, entries, showGroup, showTeacher) {
   const wrap = document.createElement('div');
   wrap.setAttribute('dir', 'rtl');
   wrap.style.cssText = `
@@ -83,6 +83,12 @@ function buildScheduleElement(title, entries, showGroup) {
             g.style.cssText = 'color: #8a7a6e; font-size: 11px;';
             td.appendChild(g);
           }
+          if (showTeacher && (e.teacher_first_name || e.teacher_last_name)) {
+            const t = document.createElement('div');
+            t.textContent = `${e.teacher_first_name || ''} ${e.teacher_last_name || ''}`.trim();
+            t.style.cssText = 'color: #8a7a6e; font-size: 11px;';
+            td.appendChild(t);
+          }
           if (e.room_name) {
             const r = document.createElement('div');
             r.textContent = e.room_name;
@@ -129,8 +135,8 @@ function addImageFitted(pdf, img, isFirstPage) {
 }
 
 /** Export a SINGLE schedule to a one-page landscape PDF. */
-export async function exportSinglePDF(entries, { fileName = 'מערכת_שעות', title = '', showGroup = true } = {}) {
-  const el = buildScheduleElement(title, entries, showGroup);
+export async function exportSinglePDF(entries, { fileName = 'מערכת_שעות', title = '', showGroup = true, showTeacher = true } = {}) {
+  const el = buildScheduleElement(title, entries, showGroup, showTeacher);
   const img = await elementToImage(el);
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   addImageFitted(pdf, img, true);
@@ -138,11 +144,11 @@ export async function exportSinglePDF(entries, { fileName = 'מערכת_שעות
 }
 
 /** Export MULTIPLE schedules, one per page, in one PDF. */
-export async function exportMultiPDF(groups, { fileName = 'מערכות_שעות', showGroup = true } = {}) {
+export async function exportMultiPDF(groups, { fileName = 'מערכות_שעות', showGroup = true, showTeacher = true } = {}) {
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   for (let i = 0; i < groups.length; i++) {
     const g = groups[i];
-    const el = buildScheduleElement(String(g.name || `גיליון ${i + 1}`), g.entries, showGroup);
+    const el = buildScheduleElement(String(g.name || `גיליון ${i + 1}`), g.entries, showGroup, showTeacher);
     const img = await elementToImage(el);
     addImageFitted(pdf, img, i === 0);
   }
