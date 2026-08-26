@@ -133,6 +133,8 @@ api2.interceptors.response.use(
       localStorage.removeItem('token');
       localStorage.removeItem('token8001');
       window.dispatchEvent(new Event('session-expired'));
+      // Swallow: session-expired modal handles it; don't propagate to React's overlay.
+      return new Promise(() => {});
     }
     return Promise.reject(error);
   }
