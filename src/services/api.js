@@ -26,6 +26,10 @@ api.interceptors.response.use(
       localStorage.removeItem('token');
       localStorage.removeItem('token8001');
       window.dispatchEvent(new Event('session-expired'));
+      // Swallow the error: the session-expired modal handles it. Returning a
+      // never-settling promise stops this request quietly, so React's error
+      // overlay doesn't show a raw 401.
+      return new Promise(() => {});
     }
     return Promise.reject(error);
   }
