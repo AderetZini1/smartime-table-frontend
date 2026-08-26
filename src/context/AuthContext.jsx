@@ -23,7 +23,9 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const handleExpired = () => {
-      setUser(null);
+      // Show the modal over the CURRENT page. Do NOT clear user here, or the
+      // app's auth routing would immediately redirect to /login and the modal
+      // would appear over the login page instead of where the user was.
       setSessionExpired(true);
     };
     window.addEventListener('session-expired', handleExpired);
