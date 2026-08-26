@@ -42,8 +42,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const goToLogin = () => {
+    // Clear the expired session and drop the user, so the app's normal
+    // auth routing shows the login screen — WITHOUT a full page reload,
+    // so the modal doesn't flash over a reloaded /login page.
     setSessionExpired(false);
-    window.location.href = '/login';
+    localStorage.removeItem('token');
+    localStorage.removeItem('token8001');
+    setUser(null);
   };
 
   return (
