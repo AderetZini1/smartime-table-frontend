@@ -146,6 +146,7 @@ export const login8001 = (username, password) =>
 
 // Generation (admin)
 export const runGeneration = () => api2.post('/generation/run');
+export const runMemeticGeneration = () => api2.post('/generation/run-memetic');
 export const getGenerationStatus = (jobId) => api2.get(`/generation/${jobId}`);
 
 // Schedule display
