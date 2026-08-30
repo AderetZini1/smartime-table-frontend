@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher, getMyConstraints, getTeacherPreferencesById, getTeacherSubjectsById, getTeacherGradeLevelsById, getTeacherHomeroomById, saveTeacherPreferencesById, addTeacherSubjectById, removeTeacherSubjectById, addTeacherGradeLevelById, removeTeacherGradeLevelById, saveTeacherHomeroomById, createConstraint, deleteConstraint, getScheduleRuns, selectScheduleRun, deleteScheduleRun, updateScheduleRunNote } from '../services/api';
+import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, runMemeticGeneration, getGenerationStatus, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher, getMyConstraints, getTeacherPreferencesById, getTeacherSubjectsById, getTeacherGradeLevelsById, getTeacherHomeroomById, saveTeacherPreferencesById, addTeacherSubjectById, removeTeacherSubjectById, addTeacherGradeLevelById, removeTeacherGradeLevelById, saveTeacherHomeroomById, createConstraint, deleteConstraint, getScheduleRuns, selectScheduleRun, deleteScheduleRun, updateScheduleRunNote } from '../services/api';
 import AddTeacherModal from '../components/AddTeacherModal';
 import EditModal from '../components/EditModal';
 import AddRoomModal from '../components/AddRoomModal';
@@ -243,6 +243,40 @@ export default function AdminDashboard() {
         setGenError('יצירת מערכת כבר רצה כרגע. נסי שוב עוד רגע.');
       } else {
         setGenError('לא ניתן להתחיל יצירת מערכת');
+      }
+    }
+  };
+
+  const handleGenerateMemetic = async () => {
+    setGenError('');
+    setGenerating(true);
+    try {
+      const start = await runMemeticGeneration();
+      const jobId = start.data.job_id;
+      const poll = async () => {
+        try {
+          const s = await getGenerationStatus(jobId);
+          if (s.data.status === 'completed') {
+            setGenerating(false);
+            await loadSchedule();
+          } else if (s.data.status === 'failed') {
+            setGenerating(false);
+            setGenError('יצירת המערכת המשופרת נכשלה. נסי שוב.');
+          } else {
+            setTimeout(poll, 3000);
+          }
+        } catch (e) {
+          setGenerating(false);
+          setGenError('שגיאה בבדיקת מצב היצירה');
+        }
+      };
+      setTimeout(poll, 3000);
+    } catch (e) {
+      setGenerating(false);
+      if (e.response && e.response.status === 409) {
+        setGenError('יצירת מערכת כבר רצה כרגע. נסי שוב עוד רגע.');
+      } else {
+        setGenError('לא ניתן להתחיל יצירת מערכת משופרת');
       }
     }
   };
@@ -1359,6 +1393,10 @@ export default function AdminDashboard() {
                 <button onClick={handleGenerate} disabled={generating} style={{ ...styles.btnAdd, opacity: generating ? 0.7 : 1, cursor: generating ? 'not-allowed' : 'pointer' }}>
                   <i className={`ti ${generating ? 'ti-loader' : 'ti-wand'}`} aria-hidden="true"></i>
                   {generating ? 'בתהליך יצירה…' : 'צור מערכת שעות'}
+                </button>
+                <button onClick={handleGenerateMemetic} disabled={generating} style={{ ...styles.btnAdd, opacity: generating ? 0.7 : 1, cursor: generating ? 'not-allowed' : 'pointer' }}>
+                  <i className={`ti ${generating ? 'ti-loader' : 'ti-sparkles'}`} aria-hidden="true"></i>
+                  {generating ? 'בתהליך יצירה…' : 'צור מערכת משופרת'}
                 </button>
                 <button onClick={handlePublish} disabled={publishing || !runInfo} style={{ ...styles.btnAdd, backgroundColor: '#6b8f5e', opacity: (publishing || !runInfo) ? 0.55 : 1, cursor: (publishing || !runInfo) ? 'not-allowed' : 'pointer' }}>
                   <i className="ti ti-send" aria-hidden="true"></i>
