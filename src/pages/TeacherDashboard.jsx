@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { updateTeacher, getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule, getMyPreferences, saveMyPreferences, getMyNotifications, markNotificationRead } from '../services/api';
+// NOTE: parseConstraintsAI is intentionally not imported yet — the backend
+// endpoint (/ai/parse-constraints) hasn't been added. The AI card below is
+// shown as a disabled "coming soon" placeholder until that's wired up.
+// Once the backend + api.js function exist, see the AI_FEATURE_ENABLED flag below.
 import { exportSingleSchedule } from '../utils/exportSchedule';
 import { useNavigate } from 'react-router-dom';
 import { exportSinglePDF } from '../utils/exportSchedulePDF';
@@ -37,6 +41,10 @@ const CELL_COLORS = {
 };
 
 const STATE_LABELS = { preferred_not: 'מעדיף שלא', unavailable: 'לא יכול' };
+
+// Flip to true once /ai/parse-constraints exists on the server AND
+// parseConstraintsAI is exported from services/api.js (see chat for that code).
+const AI_FEATURE_ENABLED = false;
 
 const styles = {
   layout: { display: 'flex', backgroundColor: '#FAF7F2', minHeight: '100vh', direction: 'rtl' },
@@ -138,6 +146,7 @@ export default function TeacherDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile');
   const [notifications, setNotifications] = useState([]);
+  const [notifFilter, setNotifFilter] = useState('all');
   const [constraints, setConstraints] = useState([]);
   const [activeWindow, setActiveWindow] = useState(null);
   const [windowLoaded, setWindowLoaded] = useState(false);
@@ -181,10 +190,10 @@ export default function TeacherDashboard() {
   }, [user]);
 
   useEffect(() => {
-    getSubjects().then(r => setSubjects(r.data)).catch(() => {});
-    getMySubjects().then(r => setMySubjects(r.data.map(s => s.subject_id))).catch(() => {});
-    getStudentGroups().then(r => setGroups(r.data)).catch(() => {});
-    getMyNotifications().then(r => setNotifications(r.data)).catch(() => {});
+    getSubjects().then(r => setSubjects(r.data)).catch(() => { });
+    getMySubjects().then(r => setMySubjects(r.data.map(s => s.subject_id))).catch(() => { });
+    getStudentGroups().then(r => setGroups(r.data)).catch(() => { });
+    getMyNotifications().then(r => setNotifications(r.data)).catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -200,7 +209,7 @@ export default function TeacherDashboard() {
         });
         setCellStates(states);
       });
-      getMyGradeLevels().then(r => setMyGradeLevels(r.data.map(g => g.grade_level))).catch(() => {});
+      getMyGradeLevels().then(r => setMyGradeLevels(r.data.map(g => g.grade_level))).catch(() => { });
       getMyHomeroomPref().then(r => {
         if (r.data && r.data.id) {
           setHomeroomPref({
@@ -208,7 +217,7 @@ export default function TeacherDashboard() {
             preferred_group_id: r.data.preferred_group_id ?? null,
           });
         }
-      }).catch(() => {});
+      }).catch(() => { });
       getMyPreferences().then(r => {
         if (r.data) {
           setPreferences(prev => ({
@@ -222,14 +231,15 @@ export default function TeacherDashboard() {
             priority_consecutive: r.data.priority_consecutive ? 1 : 0,
           }));
         }
-      }).catch(() => {});
+      }).catch(() => { });
     }
     if (activeTab === 'requests') {
       getMyRequests().then(r => setRequests(r.data));
       setHasNewNotification(false);
     }
     if (activeTab === 'notifications') {
-      getMyNotifications().then(r => setNotifications(r.data)).catch(() => {});
+      setNotifFilter('all');
+      getMyNotifications().then(r => setNotifications(r.data)).catch(() => { });
     }
     if (activeTab === 'schedule') {
       setScheduleLoading(true);
@@ -257,7 +267,7 @@ export default function TeacherDashboard() {
           prevAnsweredCount.current = answered.length;
         }
         if (activeTab === 'requests') setRequests(r.data);
-      }).catch(() => {});
+      }).catch(() => { });
     };
     check();                             // run once immediately (sets baseline)
     const interval = setInterval(check, 30000);
@@ -319,7 +329,17 @@ export default function TeacherDashboard() {
       setNotifications(prev => prev.map(n => n.notification_id === notifId ? { ...n, is_read: false } : n));
     });
   };
-  
+
+  // Apply the "all / unread" filter and sort newest-first (the "date" tab uses the same sort).
+  const getFilteredNotifications = () => {
+    let filtered = [...notifications];
+    if (notifFilter === 'unread') {
+      filtered = filtered.filter(n => !n.is_read);
+    }
+    filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    return filtered;
+  };
+
   const handleSendRequest = async () => {
     if (!newRequest.description.trim()) { setRequestError(true); return; }
     setRequestError(false);
@@ -510,32 +530,41 @@ export default function TeacherDashboard() {
         )}
 
         {activeTab === 'notifications' && (
-          <div style={styles.card}>
-            {notifications.length === 0 ? (
-              <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px' }}>
-                <i className="ti ti-bell-off" style={{ fontSize: '36px', display: 'block', marginBottom: '14px' }} aria-hidden="true"></i>
-                <div style={{ fontSize: '15px' }}>אין התראות</div>
-              </div>
-            ) : notifications.map((n, i) => (
-              <div key={n.id} style={{ padding: '16px', borderBottom: i < notifications.length - 1 ? '1px solid #f0ebe3' : 'none', backgroundColor: n.is_read ? 'transparent' : '#F5F8F2', borderRadius: '8px', marginBottom: '4px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {!n.is_read && <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#8a9e78', flexShrink: 0 }} />}
-                    <span style={{ fontSize: '15px', color: '#4a3f35', fontWeight: n.is_read ? 400 : 600 }}>{n.title}</span>
-                  </div>
-                  <span style={{ fontSize: '11px', color: '#c8baa6', whiteSpace: 'nowrap', marginRight: '12px' }}>{fmtDate(n.created_at)}</span>
+          <>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+              <button onClick={() => setNotifFilter('all')} style={styles.chipBtn(notifFilter === 'all')}>כל ההודעות</button>
+              <button onClick={() => setNotifFilter('unread')} style={styles.chipBtn(notifFilter === 'unread')}>
+                לא נקראו {unreadCount > 0 && `(${unreadCount})`}
+              </button>
+              <button onClick={() => setNotifFilter('date')} style={styles.chipBtn(notifFilter === 'date')}>לפי תאריך</button>
+            </div>
+            <div style={styles.card}>
+              {getFilteredNotifications().length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px' }}>
+                  <i className="ti ti-bell-off" style={{ fontSize: '36px', display: 'block', marginBottom: '14px' }} aria-hidden="true"></i>
+                  <div style={{ fontSize: '15px' }}>{notifFilter === 'unread' ? 'אין הודעות שלא נקראו' : 'אין התראות'}</div>
                 </div>
-                <div style={{ fontSize: '13px', color: '#8a7a6e', marginBottom: n.is_read ? 0 : '10px', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{n.body}</div>
-                {!n.is_read && (
-                  <button onClick={() => handleMarkRead(n.notification_id)} style={{ ...styles.btnOutline, fontSize: '12px', padding: '5px 12px' }}>
-                    <i className="ti ti-check" aria-hidden="true"></i> סמן כנקרא
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
+              ) : getFilteredNotifications().map((n, i, arr) => (
+                <div key={n.id} style={{ padding: '16px', borderBottom: i < arr.length - 1 ? '1px solid #f0ebe3' : 'none', backgroundColor: n.is_read ? 'transparent' : '#F5F8F2', borderRadius: '8px', marginBottom: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {!n.is_read && <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#8a9e78', flexShrink: 0 }} />}
+                      <span style={{ fontSize: '15px', color: '#4a3f35', fontWeight: n.is_read ? 400 : 600 }}>{n.title}</span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: '#c8baa6', whiteSpace: 'nowrap', marginRight: '12px' }}>{fmtDate(n.created_at)}</span>
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#8a7a6e', marginBottom: n.is_read ? 0 : '10px', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{n.body}</div>
+                  {!n.is_read && (
+                    <button onClick={() => handleMarkRead(n.notification_id)} style={{ ...styles.btnOutline, fontSize: '12px', padding: '5px 12px' }}>
+                      <i className="ti ti-check" aria-hidden="true"></i> סמן כנקרא
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
         )}
-        
+
         {/* העדפות שעות */}
         {activeTab === 'constraints' && (
           <>
@@ -699,6 +728,20 @@ export default function TeacherDashboard() {
                 </div>
 
                 <div style={styles.card}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <div style={{ fontSize: '15px', color: '#4a3f35' }}>הזן אילוצים בשפה חופשית</div>
+                    <span style={{ fontSize: '11px', color: '#a08c30', backgroundColor: '#FFF3A3', border: '1px solid #e8d88a', borderRadius: '20px', padding: '2px 10px' }}>בקרוב</span>
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#8a7a6e', marginBottom: '16px' }}>
+                    בקרוב ניתן יהיה לכתוב, למשל: "אני לא יכול ביום שני", ולתרגם זאת אוטומטית לאילוצים בלוח הזמינות למעלה.
+                  </div>
+                  <textarea disabled placeholder='לדוגמה: "אני לא יכול ביום שני, ומעדיף שלא בשיעור האחרון בימי רביעי"' style={{ ...styles.input, height: '80px', resize: 'none', marginBottom: '12px', opacity: 0.6, cursor: 'not-allowed' }} />
+                  <button disabled style={{ ...styles.btnSave, opacity: 0.5, cursor: 'not-allowed' }}>
+                    <i className="ti ti-sparkles" aria-hidden="true"></i> נתח עם AI (בקרוב)
+                  </button>
+                </div>
+
+                <div style={styles.card}>
                   <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '16px' }}>שעות שבועיות</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '8px' }}>
                     <div>
@@ -798,55 +841,55 @@ export default function TeacherDashboard() {
                 </button>
               </div>
             )}
-          <div style={styles.card}>
-            {scheduleLoading ? (
-              <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px' }}>טוען…</div>
-            ) : scheduleError ? (
-              <div style={{ textAlign: 'center', color: '#c0705a', padding: '40px' }}>{scheduleError}</div>
-            ) : !myRun ? (
-              <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px' }}>
-                <i className="ti ti-calendar" style={{ fontSize: '36px', display: 'block', marginBottom: '14px' }} aria-hidden="true"></i>
-                <div style={{ fontSize: '15px' }}>מערכת השעות עדיין לא פורסמה</div>
-              </div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                {myRun?.published_at && (
-                  <div style={{ textAlign: 'left', fontSize: '12px', color: '#8a7a6e', marginBottom: '10px' }}>
-                    פורסם ב-{fmtDate(myRun.published_at)}
-                  </div>
-                )}
-                <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ ...styles.gridHeadCell, width: '60px' }}>שעה</th>
-                      {DAY_ORDER.map(d => <th key={d} style={styles.gridHeadCell}>{DAY_NAMES_BY_NUM[d]}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {HOURS.map(hour => (
-                      <tr key={hour}>
-                        <td style={styles.gridHourCell}>שיעור {hour}</td>
-                        {DAY_ORDER.map(day => {
-                          const lessons = scheduleCell(day, hour);
-                          return (
-                            <td key={day} style={styles.gridCell}>
-                              {lessons.map((e, idx) => (
-                                <div key={idx} style={styles.lessonBox}>
-                                  <div style={{ fontWeight: 600 }}>{e.subject_name}</div>
-                                  <div style={{ color: '#8a7a6e' }}>{e.group_name}</div>
-                                  {e.room_name && <div style={{ color: '#a99', fontSize: '10px' }}>{e.room_name}</div>}
-                                </div>
-                              ))}
-                            </td>
-                          );
-                        })}
+            <div style={styles.card}>
+              {scheduleLoading ? (
+                <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px' }}>טוען…</div>
+              ) : scheduleError ? (
+                <div style={{ textAlign: 'center', color: '#c0705a', padding: '40px' }}>{scheduleError}</div>
+              ) : !myRun ? (
+                <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px' }}>
+                  <i className="ti ti-calendar" style={{ fontSize: '36px', display: 'block', marginBottom: '14px' }} aria-hidden="true"></i>
+                  <div style={{ fontSize: '15px' }}>מערכת השעות עדיין לא פורסמה</div>
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  {myRun?.published_at && (
+                    <div style={{ textAlign: 'left', fontSize: '12px', color: '#8a7a6e', marginBottom: '10px' }}>
+                      פורסם ב-{fmtDate(myRun.published_at)}
+                    </div>
+                  )}
+                  <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ ...styles.gridHeadCell, width: '60px' }}>שעה</th>
+                        {DAY_ORDER.map(d => <th key={d} style={styles.gridHeadCell}>{DAY_NAMES_BY_NUM[d]}</th>)}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+                    </thead>
+                    <tbody>
+                      {HOURS.map(hour => (
+                        <tr key={hour}>
+                          <td style={styles.gridHourCell}>שיעור {hour}</td>
+                          {DAY_ORDER.map(day => {
+                            const lessons = scheduleCell(day, hour);
+                            return (
+                              <td key={day} style={styles.gridCell}>
+                                {lessons.map((e, idx) => (
+                                  <div key={idx} style={styles.lessonBox}>
+                                    <div style={{ fontWeight: 600 }}>{e.subject_name}</div>
+                                    <div style={{ color: '#8a7a6e' }}>{e.group_name}</div>
+                                    {e.room_name && <div style={{ color: '#a99', fontSize: '10px' }}>{e.room_name}</div>}
+                                  </div>
+                                ))}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>
