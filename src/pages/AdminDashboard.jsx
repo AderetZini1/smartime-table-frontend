@@ -167,6 +167,21 @@ export default function AdminDashboard() {
   const [exportMsg, setExportMsg] = useState('');
   const [search, setSearch] = useState('');
   const [tilesExpanded, setTilesExpanded] = useState(false);
+    // School Settings
+  const [schoolTab, setSchoolTab] = useState('day');
+  const [schoolSettings, setSchoolSettings] = useState({ active_days: [1, 2, 3, 4, 5, 6], start_time: '08:00', breaks: [], grade_end_times: {} });
+  const [gradeLimits, setGradeLimits] = useState({});
+  const [pedagogical, setPedagogical] = useState([]);
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  const [newBreak, setNewBreak] = useState({ after_lesson: 2, duration_minutes: 10 });
+  const [newPedagogical, setNewPedagogical] = useState({ constraint_type: 'max_per_day', subject_a_id: '', subject_b_id: '', numeric_value: '', raw_text: '' });
+
+  // Curriculum
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [curriculumData, setCurriculumData] = useState([]);
+  const [curriculumHours, setCurriculumHours] = useState({});
+  const [curriculumSaved, setCurriculumSaved] = useState(false);
+  const [copyFromGroup, setCopyFromGroup] = useState('');
   const [prefTeacher, setPrefTeacher] = useState(null);
   const [prefEditing, setPrefEditing] = useState(false);
   const [prefDraft, setPrefDraft] = useState({});
