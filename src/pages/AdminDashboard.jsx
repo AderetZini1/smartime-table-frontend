@@ -213,10 +213,39 @@ export default function AdminDashboard() {
       getNotifications().then(r => setSentNotifs(r.data)).catch(() => {});
       getTeachers().then(r => setTeachers(r.data)).catch(() => {});
     }
+
+    if (activeTab === 'school') {
+      getSchoolSettings().then(r => setSchoolSettings({ ...r.data, grade_end_times: r.data.grade_end_times || {} })).catch(() => { });
+      getGradeLimits().then(r => {
+        const obj = {};
+        r.data.forEach(g => { obj[g.grade_level] = g.max_lessons_per_day; });
+        setGradeLimits(obj);
+      }).catch(() => { });
+      getPedagogicalConstraints().then(r => setPedagogical(r.data)).catch(() => { });
+      getSubjects().then(r => setSubjects(r.data)).catch(() => { });
+      getStudentGroups().then(r => {
+        setGroups(r.data);
+        if (r.data.length > 0 && !selectedGroup) setSelectedGroup(r.data[0]);
+      }).catch(() => { });
+    }
     
     
   }, [activeTab]);
 
+
+  useEffect(() => {
+    if (selectedGroup) {
+      getCurriculumByGroup(selectedGroup.id).then(r => setCurriculumData(r.data)).catch(() => { });
+    }
+  }, [selectedGroup]);
+
+  useEffect(() => {
+    const hours = {};
+    curriculumData.forEach(c => { hours[c.subject_id] = c.weekly_hours; });
+    setCurriculumHours(hours);
+  }, [curriculumData]);
+  
+  
   useEffect(() => {
     getMyRequests().then(r => setPendingCount(r.data.filter(x => x.status === 'pending').length)).catch(() => {});
   }, []);
@@ -329,6 +358,86 @@ export default function AdminDashboard() {
     } finally {
       setPublishing(false);
     }
+  };
+
+    const handleSaveSchoolSettings = async () => {
+    try {
+      await saveSchoolSettings(schoolSettings);
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 2000);
+    } catch (e) { console.error(e); }
+  };
+
+  const handleAddBreak = () => {
+    setSchoolSettings(prev => ({ ...prev, breaks: [...(prev.breaks || []), newBreak] }));
+    setNewBreak({ after_lesson: 2, duration_minutes: 10 });
+  };
+
+  const handleRemoveBreak = (idx) => {
+    setSchoolSettings(prev => ({ ...prev, breaks: prev.breaks.filter((_, i) => i !== idx) }));
+  };
+
+  const handleSaveGradeLimit = async (grade, value) => {
+    await saveGradeLimit({ grade_level: grade, max_lessons_per_day: parseInt(value) });
+    setGradeLimits(prev => ({ ...prev, [grade]: parseInt(value) }));
+  };
+
+  const handleAddPedagogical = async () => {
+    if (!newPedagogical.constraint_type) return;
+    const data = {
+      constraint_type: newPedagogical.constraint_type,
+      subject_a_id: newPedagogical.subject_a_id ? parseInt(newPedagogical.subject_a_id) : null,
+      subject_b_id: newPedagogical.subject_b_id ? parseInt(newPedagogical.subject_b_id) : null,
+      numeric_value: newPedagogical.numeric_value ? parseInt(newPedagogical.numeric_value) : null,
+      raw_text: newPedagogical.raw_text || null,
+    };
+    await addPedagogicalConstraint(data);
+    getPedagogicalConstraints().then(r => setPedagogical(r.data));
+    setNewPedagogical({ constraint_type: 'max_per_day', subject_a_id: '', subject_b_id: '', numeric_value: '', raw_text: '' });
+  };
+
+  const handleDeletePedagogical = async (id) => {
+    await deletePedagogicalConstraint(id);
+    setPedagogical(prev => prev.filter(p => p.id !== id));
+  };
+
+  const handleSaveCurriculum = async () => {
+    if (!selectedGroup) return;
+    for (const subject of subjects) {
+      const existing = curriculumData.find(c => c.subject_id === subject.id);
+      const hours = parseInt(curriculumHours[subject.id] || 0);
+      if (existing) {
+        if (existing.weekly_hours !== hours) {
+          await updateCurriculumRequirement(existing.id, { weekly_hours: hours });
+        }
+      } else if (hours > 0) {
+        await createCurriculumRequirement({ subject_id: subject.id, student_group_id: selectedGroup.id, weekly_hours: hours });
+      }
+    }
+    getCurriculumByGroup(selectedGroup.id).then(r => setCurriculumData(r.data));
+    setCurriculumSaved(true);
+    setTimeout(() => setCurriculumSaved(false), 2000);
+  };
+
+  const handleCopyFrom = async () => {
+    if (!copyFromGroup) return;
+    const fromGroup = groups.find(g => g.id === parseInt(copyFromGroup));
+    if (!fromGroup) return;
+    const res = await getCurriculumByGroup(fromGroup.id);
+    const newHours = {};
+    res.data.forEach(c => { newHours[c.subject_id] = c.weekly_hours; });
+    setCurriculumHours(newHours);
+  };
+
+  const groupsByGrade = () => {
+    const obj = {};
+    groups.forEach(g => {
+      const match = g.group_name.match(/([א-ו])/);
+      const grade = match ? match[1] : 'אחר';
+      if (!obj[grade]) obj[grade] = [];
+      obj[grade].push(g);
+    });
+    return obj;
   };
 
   const viewTeacherSchedule = () => {
