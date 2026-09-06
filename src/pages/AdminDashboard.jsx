@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, runMemeticGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher, getMyConstraints, getTeacherPreferencesById, getTeacherSubjectsById, getTeacherGradeLevelsById, getTeacherHomeroomById, saveTeacherPreferencesById, addTeacherSubjectById, removeTeacherSubjectById, addTeacherGradeLevelById, removeTeacherGradeLevelById, saveTeacherHomeroomById, createConstraint, deleteConstraint, getScheduleRuns, selectScheduleRun, deleteScheduleRun, updateScheduleRunNote } from '../services/api';
+import { getTeachers, deleteTeacher, getRooms, deleteRoom, getSubjects, deleteSubject, getStudentGroups, deleteStudentGroup, getMyRequests, respondToRequest, getSubmissionWindows, createSubmissionWindow, deleteSubmissionWindow, runGeneration, runMemeticGeneration, getGenerationStatus, getCurrentSchedule, publishSchedule, getViolations, sendNotification, getNotifications, updateRoom, updateSubject, updateStudentGroup, updateTeacher, getMyConstraints, getTeacherPreferencesById, getTeacherSubjectsById, getTeacherGradeLevelsById, getTeacherHomeroomById, saveTeacherPreferencesById, addTeacherSubjectById, removeTeacherSubjectById, addTeacherGradeLevelById, removeTeacherGradeLevelById, saveTeacherHomeroomById, createConstraint, deleteConstraint, getScheduleRuns, selectScheduleRun, deleteScheduleRun, updateScheduleRunNote, , getSchoolSettings, saveSchoolSettings, getGradeLimits, saveGradeLimit, getPedagogicalConstraints, addPedagogicalConstraint, deletePedagogicalConstraint, getCurriculumByGroup, createCurriculumRequirement, updateCurriculumRequirement, deleteCurriculumRequirement } from '../services/api';
 import AddTeacherModal from '../components/AddTeacherModal';
 import EditModal from '../components/EditModal';
 import AddRoomModal from '../components/AddRoomModal';
@@ -27,10 +27,30 @@ const TABS = [
   { id: 'teacherprefs', label: 'העדפות מורים', icon: 'ti-clipboard-text' },
   { id: 'windows', label: 'חלונות הגשה', icon: 'ti-calendar-event' },
   { id: 'notifications', label: 'התראות', icon: 'ti-bell' },
+  { id: 'school', label: 'הגדרות מוסד', icon: 'ti-settings' },
   { id: 'teachers', label: 'מורים', icon: 'ti-users' },
   { id: 'rooms', label: 'חדרים', icon: 'ti-building' },
   { id: 'subjects', label: 'מקצועות', icon: 'ti-book' },
   { id: 'groups', label: 'קבוצות', icon: 'ti-school' },
+];
+
+const SCHOOL_TABS = [
+  { id: 'day', label: 'מבנה יום' },
+  { id: 'grade', label: 'מגבלות שכבה' },
+  { id: 'ped', label: 'אילוצים פדגוגיים' },
+  { id: 'curriculum', label: 'תכנית לימודים' },
+];
+
+const DAYS = { 1: 'ראשון', 2: 'שני', 3: 'שלישי', 4: 'רביעי', 5: 'חמישי', 6: 'שישי' };
+const GRADES = [1, 2, 3, 4, 5, 6];
+const GRADE_LABELS = { 1: "א'", 2: "ב'", 3: "ג'", 4: "ד'", 5: "ה'", 6: "ו'" };
+
+const PEDAGOGICAL_TYPES = [
+  { value: 'max_per_day', label: 'מקסימום שיעורים ביום' },
+  { value: 'not_last', label: 'לא בשיעור האחרון' },
+  { value: 'morning_only', label: 'בבוקר בלבד' },
+  { value: 'not_consecutive', label: 'לא ברצף עם מקצוע אחר' },
+  { value: 'min_gap', label: 'מינימום הפסקה בין שיעורים' },
 ];
 
 const REQUEST_TYPES = {
