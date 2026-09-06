@@ -168,4 +168,19 @@ export const getMyNotifications = () => api.get('/notifications/me');
 export const markNotificationRead = (id) => api.patch(`/notifications/me/${id}/read`);
 export const getNotifications = () => api.get('/notifications/admin');
 
+// School Settings
+export const getSchoolSettings = () => api.get('/school-settings/');
+export const saveSchoolSettings = (data) => api.post('/school-settings/', data);
+export const getGradeLimits = () => api.get('/school-settings/grade-limits');
+export const saveGradeLimit = (data) => api.post('/school-settings/grade-limits', data);
+export const getPedagogicalConstraints = () => api.get('/school-settings/pedagogical');
+export const addPedagogicalConstraint = (data) => api.post('/school-settings/pedagogical', data);
+export const deletePedagogicalConstraint = (id) => api.delete(`/school-settings/pedagogical/${id}`);
+
+// Curriculum Requirements
+export const getCurriculumByGroup = (groupId) => api.get(`/curriculum-requirements/by-group/${groupId}`);
+export const createCurriculumRequirement = (data) => api.post('/curriculum-requirements/', data);
+export const updateCurriculumRequirement = (id, data) => api.patch(`/curriculum-requirements/${id}`, data);
+export const deleteCurriculumRequirement = (id) => api.delete(`/curriculum-requirements/${id}`);
+
 export default api;
