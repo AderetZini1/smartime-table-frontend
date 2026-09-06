@@ -1750,6 +1750,214 @@ export default function AdminDashboard() {
           </div>
           </>
         )}
+
+        {/* ============ SCHOOL SETTINGS TAB (paste after the notifications block) ============ */}
+        {activeTab === 'school' && (
+          <>
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: '1px solid #e2dacc' }}>
+              {SCHOOL_TABS.map(t => (
+                <button key={t.id} onClick={() => setSchoolTab(t.id)}
+                  style={{ padding: '8px 16px', fontSize: '13px', border: 'none', background: 'transparent', color: schoolTab === t.id ? '#4a3f35' : '#8a7a6e', cursor: 'pointer', borderBottom: schoolTab === t.id ? '2px solid #8a9e78' : '2px solid transparent', fontFamily: 'Varela Round, sans-serif', fontWeight: schoolTab === t.id ? '500' : 'normal' }}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+        
+            {schoolTab === 'day' && (
+              <div style={styles.card}>
+                <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '20px' }}>מבנה יום הלימודים</div>
+        
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={styles.label}>ימי לימוד</label>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {Object.entries(DAYS).map(([num, name]) => {
+                      const selected = (schoolSettings.active_days || []).includes(parseInt(num));
+                      return (
+                        <button key={num} onClick={() => {
+                          const d = parseInt(num);
+                          setSchoolSettings(prev => ({
+                            ...prev,
+                            active_days: selected ? prev.active_days.filter(x => x !== d) : [...(prev.active_days || []), d]
+                          }));
+                        }} style={styles.chipBtn ? styles.chipBtn(selected) : { padding: '6px 14px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer', backgroundColor: selected ? '#8a9e78' : '#f5f2ee', color: selected ? '#fff' : '#8a7a6e', border: `1px solid ${selected ? '#8a9e78' : '#e2dacc'}`, fontFamily: 'Varela Round, sans-serif' }}>{name}</button>
+                      );
+                    })}
+                  </div>
+                </div>
+        
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+                  <div>
+                    <label style={styles.label}>שעת התחלה</label>
+                    <input type="time" style={styles.input} value={schoolSettings.start_time || '08:00'} onChange={e => setSchoolSettings(prev => ({ ...prev, start_time: e.target.value }))} />
+                  </div>
+                </div>
+        
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={styles.label}>שעת סיום לפי שכבה</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px', marginTop: '8px' }}>
+                    {GRADES.map(grade => (
+                      <div key={grade}>
+                        <label style={{ ...styles.label, textAlign: 'center' }}>כיתות {GRADE_LABELS[grade]}</label>
+                        <input type="time" style={{ ...styles.input, textAlign: 'center' }}
+                          value={(schoolSettings.grade_end_times || {})[String(grade)] || ''}
+                          onChange={e => setSchoolSettings(prev => ({
+                            ...prev,
+                            grade_end_times: { ...(prev.grade_end_times || {}), [String(grade)]: e.target.value }
+                          }))} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+        
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={styles.label}>הפסקות</label>
+                  {(schoolSettings.breaks || []).map((b, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: '1px solid #f0ebe3' }}>
+                      <span style={{ fontSize: '13px', color: '#4a3f35' }}>אחרי שיעור {b.after_lesson}</span>
+                      <span style={{ fontSize: '13px', color: '#8a7a6e' }}>{b.duration_minutes} דקות</span>
+                      <i className="ti ti-trash" onClick={() => handleRemoveBreak(i)} style={{ ...styles.iconBtn, marginRight: 'auto' }} aria-hidden="true"></i>
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '12px', alignItems: 'flex-end' }}>
+                    <div>
+                      <label style={styles.label}>אחרי שיעור</label>
+                      <input type="number" min="1" max="8" value={newBreak.after_lesson} onChange={e => setNewBreak(p => ({ ...p, after_lesson: parseInt(e.target.value) }))} style={{ ...styles.input, width: '80px' }} />
+                    </div>
+                    <div>
+                      <label style={styles.label}>דקות</label>
+                      <input type="number" min="5" max="60" value={newBreak.duration_minutes} onChange={e => setNewBreak(p => ({ ...p, duration_minutes: parseInt(e.target.value) }))} style={{ ...styles.input, width: '80px' }} />
+                    </div>
+                    <button onClick={handleAddBreak} style={styles.btnOutline}>+ הוסף הפסקה</button>
+                  </div>
+                </div>
+        
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <button onClick={handleSaveSchoolSettings} style={styles.btnAdd}>שמור הגדרות יום</button>
+                  {settingsSaved && <span style={{ fontSize: '13px', color: '#8a9e78' }}>✓ נשמר</span>}
+                </div>
+              </div>
+            )}
+        
+            {schoolTab === 'grade' && (
+              <div style={styles.card}>
+                <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '16px' }}>מקסימום שיעורים ביום לפי שכבה</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px' }}>
+                  {GRADES.map(grade => (
+                    <div key={grade}>
+                      <label style={{ ...styles.label, textAlign: 'center' }}>כיתות {GRADE_LABELS[grade]}</label>
+                      <input type="number" min="1" max="8" value={gradeLimits[grade] || 8}
+                        onChange={e => setGradeLimits(prev => ({ ...prev, [grade]: parseInt(e.target.value) }))}
+                        onBlur={e => handleSaveGradeLimit(grade, e.target.value)}
+                        style={{ ...styles.input, textAlign: 'center' }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+        
+            {schoolTab === 'ped' && (
+              <div style={styles.card}>
+                <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '16px' }}>אילוצים פדגוגיים</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '12px', marginBottom: '16px', alignItems: 'flex-end' }}>
+                  <div>
+                    <label style={styles.label}>סוג אילוץ</label>
+                    <select value={newPedagogical.constraint_type} onChange={e => setNewPedagogical(p => ({ ...p, constraint_type: e.target.value }))} style={{ ...styles.input, cursor: 'pointer' }}>
+                      {PEDAGOGICAL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={styles.label}>מקצוע</label>
+                    <select value={newPedagogical.subject_a_id} onChange={e => setNewPedagogical(p => ({ ...p, subject_a_id: e.target.value }))} style={{ ...styles.input, cursor: 'pointer' }}>
+                      <option value="">בחר מקצוע</option>
+                      {subjects.map(s => <option key={s.id} value={s.id}>{s.subject_name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={styles.label}>ערך</label>
+                    <input type="number" value={newPedagogical.numeric_value} onChange={e => setNewPedagogical(p => ({ ...p, numeric_value: e.target.value }))} style={styles.input} placeholder="למשל: 2" />
+                  </div>
+                  <button onClick={handleAddPedagogical} style={styles.btnAdd}>+ הוסף</button>
+                </div>
+                {pedagogical.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: '#c8baa6', padding: '24px', fontSize: '14px' }}>אין אילוצים פדגוגיים עדיין</div>
+                ) : pedagogical.map((p, i) => (
+                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', padding: '12px 0', borderBottom: i < pedagogical.length - 1 ? '1px solid #f0ebe3' : 'none' }}>
+                    <span style={{ fontSize: '12px', backgroundColor: '#EDF4E8', color: '#6b8f5e', borderRadius: '20px', padding: '3px 10px', marginLeft: '10px' }}>
+                      {PEDAGOGICAL_TYPES.find(t => t.value === p.constraint_type)?.label || p.constraint_type}
+                    </span>
+                    <span style={{ fontSize: '13px', color: '#4a3f35', flex: 1 }}>
+                      {subjects.find(s => s.id === p.subject_a_id)?.subject_name || ''}
+                      {p.numeric_value ? ` — ${p.numeric_value}` : ''}
+                    </span>
+                    <i className="ti ti-trash" onClick={() => handleDeletePedagogical(p.id)} style={styles.iconBtn} aria-hidden="true"></i>
+                  </div>
+                ))}
+              </div>
+            )}
+        
+            {schoolTab === 'curriculum' && (
+              <div style={styles.card}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <div style={{ fontSize: '15px', color: '#4a3f35' }}>תכנית לימודים שבועית</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {curriculumSaved && <span style={{ fontSize: '13px', color: '#8a9e78' }}>✓ נשמר</span>}
+                    <button onClick={handleSaveCurriculum} style={styles.btnAdd}>שמור שינויים</button>
+                  </div>
+                </div>
+        
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', color: '#8a7a6e' }}>העתק מכיתה:</span>
+                  <select value={copyFromGroup} onChange={e => setCopyFromGroup(e.target.value)} style={{ ...styles.input, width: 'auto', fontSize: '12px', padding: '5px 10px' }}>
+                    <option value="">בחר כיתה</option>
+                    {groups.filter(g => g.id !== selectedGroup?.id).map(g => <option key={g.id} value={g.id}>{g.group_name}</option>)}
+                  </select>
+                  <button onClick={handleCopyFrom} style={{ ...styles.btnOutline, fontSize: '12px', padding: '5px 12px' }}>העתק</button>
+                </div>
+        
+                <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '16px' }}>
+                  <div style={{ backgroundColor: '#FAF7F2', borderRadius: '10px', border: '1px solid #e2dacc', padding: '10px', maxHeight: '500px', overflowY: 'auto' }}>
+                    {Object.entries(groupsByGrade()).map(([grade, gradeGroups]) => (
+                      <div key={grade} style={{ marginBottom: '8px' }}>
+                        <div style={{ fontSize: '11px', color: '#c8baa6', padding: '4px 6px', marginBottom: '2px' }}>שכבת {grade}</div>
+                        {gradeGroups.map(g => (
+                          <button key={g.id} onClick={() => setSelectedGroup(g)}
+                            style={{ display: 'block', width: '100%', textAlign: 'right', padding: '7px 10px', borderRadius: '7px', border: 'none', background: selectedGroup?.id === g.id ? '#EDF4E8' : 'transparent', fontSize: '13px', color: selectedGroup?.id === g.id ? '#3d6b2e' : '#8a7a6e', cursor: 'pointer', marginBottom: '2px', fontFamily: 'Varela Round, sans-serif', fontWeight: selectedGroup?.id === g.id ? '500' : 'normal' }}>
+                            {g.group_name}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+        
+                  <div>
+                    {selectedGroup ? (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                          <span style={{ fontSize: '14px', fontWeight: '500', color: '#4a3f35' }}>כיתה {selectedGroup.group_name}</span>
+                          <span style={{ backgroundColor: '#EDF4E8', color: '#3d6b2e', borderRadius: '20px', padding: '4px 12px', fontSize: '12px' }}>
+                            סה"כ {Object.values(curriculumHours).reduce((a, b) => a + (parseInt(b) || 0), 0)} שעות
+                          </span>
+                        </div>
+                        {subjects.map(subject => (
+                          <div key={subject.id} style={{ display: 'flex', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f0ebe3', gap: '10px' }}>
+                            <div style={{ flex: 1, fontSize: '14px', color: '#4a3f35' }}>{subject.subject_name}</div>
+                            <input type="number" min="0" max="15"
+                              value={curriculumHours[subject.id] || 0}
+                              onChange={e => setCurriculumHours(prev => ({ ...prev, [subject.id]: parseInt(e.target.value) || 0 }))}
+                              style={{ width: '44px', height: '44px', textAlign: 'center', fontSize: '16px', fontWeight: '500', border: `1.5px solid ${(curriculumHours[subject.id] || 0) > 0 ? '#8a9e78' : '#e2dacc'}`, borderRadius: '8px', background: (curriculumHours[subject.id] || 0) > 0 ? '#EDF4E8' : '#FAF7F2', color: (curriculumHours[subject.id] || 0) > 0 ? '#3d6b2e' : '#4a3f35', outline: 'none', MozAppearance: 'textfield' }} />
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px' }}>בחר כיתה מהרשימה</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+        
       </div>
       
       {modal === 'teacher' && <AddTeacherModal onClose={() => setModal(null)} onAdded={t => setTeachers(prev => [...prev, t])} />}
