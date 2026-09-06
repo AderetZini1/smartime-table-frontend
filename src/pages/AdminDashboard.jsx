@@ -729,7 +729,7 @@ export default function AdminDashboard() {
           <div style={styles.brandName}>פאנל ניהול</div>
         </div>
         <nav style={{ flex: 1 }}>
-          {['schedule', 'history', 'requests', 'teacherprefs', 'windows', 'notifications'].map(id => {
+          {['schedule', 'history', 'requests', 'teacherprefs', 'windows', 'notifications', 'school'].map(id => {
             const tab = TABS.find(t => t.id === id);
             return (
               <button key={id} onClick={() => setActiveTab(id)} style={styles.navItem(activeTab === id)}>
