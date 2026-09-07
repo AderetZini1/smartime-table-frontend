@@ -29,7 +29,7 @@ api.interceptors.response.use(
       // Swallow the error: the session-expired modal handles it. Returning a
       // never-settling promise stops this request quietly, so React's error
       // overlay doesn't show a raw 401.
-      return new Promise(() => {});
+      return new Promise(() => { });
     }
     return Promise.reject(error);
   }
@@ -108,7 +108,14 @@ export const selectScheduleRun = (id) => api.patch(`/schedule-runs/${id}/select`
 export const deleteScheduleRun = (id) => api.delete(`/schedule-runs/${id}`);
 export const updateScheduleRunNote = (id, note) => api.patch(`/schedule-runs/${id}/note`, { admin_note: note });
 
+
+// AI parsing of teacher preferences
+export const parseConstraintsAI = (text) =>
+  api.post('/ai/parse-preferences', { text });
+
 export const getViolations = () => api2.get('/schedule/violations');
+
+export const getTimeslots = () => api.get('/timeslots/');
 
 // ========================================================================
 // SmarTime generation/schedule backend (port 8001) — separate from 8000
@@ -134,7 +141,7 @@ api2.interceptors.response.use(
       localStorage.removeItem('token8001');
       window.dispatchEvent(new Event('session-expired'));
       // Swallow: session-expired modal handles it; don't propagate to React's overlay.
-      return new Promise(() => {});
+      return new Promise(() => { });
     }
     return Promise.reject(error);
   }

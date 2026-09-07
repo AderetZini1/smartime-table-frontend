@@ -1,16 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { updateTeacher, getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule, getMyPreferences, saveMyPreferences, getMyNotifications, markNotificationRead } from '../services/api';
-// NOTE: parseConstraintsAI is intentionally not imported yet — the backend
-// endpoint (/ai/parse-constraints) hasn't been added. The AI card below is
-// shown as a disabled "coming soon" placeholder until that's wired up.
-// Once the backend + api.js function exist, see the AI_FEATURE_ENABLED flag below.
+import { updateTeacher, getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule, getMyPreferences, saveMyPreferences, getMyNotifications, markNotificationRead, parseConstraintsAI, getTimeslots } from '../services/api';
 import { exportSingleSchedule } from '../utils/exportSchedule';
 import { useNavigate } from 'react-router-dom';
 import { exportSinglePDF } from '../utils/exportSchedulePDF';
 
 const DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'];
-const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
 const GRADES = [1, 2, 3, 4, 5, 6];
 const GRADE_LABELS = { 1: "א'", 2: "ב'", 3: "ג'", 4: "ד'", 5: "ה'", 6: "ו'" };
 
@@ -42,9 +37,9 @@ const CELL_COLORS = {
 
 const STATE_LABELS = { preferred_not: 'מעדיף שלא', unavailable: 'לא יכול' };
 
-// Flip to true once /ai/parse-constraints exists on the server AND
-// parseConstraintsAI is exported from services/api.js (see chat for that code).
-const AI_FEATURE_ENABLED = false;
+// AI-powered free-text preferences parsing is wired up to the backend
+// (/ai/parse-preferences) and services/api.js's parseConstraintsAI.
+const AI_FEATURE_ENABLED = true;
 
 const styles = {
   layout: { display: 'flex', backgroundColor: '#FAF7F2', minHeight: '100vh', direction: 'rtl' },
@@ -147,7 +142,7 @@ export default function TeacherDashboard() {
   const [activeTab, setActiveTab] = useState('profile');
   const [notifications, setNotifications] = useState([]);
   const [notifFilter, setNotifFilter] = useState('all');
-  const [constraints, setConstraints] = useState([]);
+  const [constraintsRaw, setConstraintsRaw] = useState([]);
   const [activeWindow, setActiveWindow] = useState(null);
   const [windowLoaded, setWindowLoaded] = useState(false);
   const [requests, setRequests] = useState([]);
@@ -174,12 +169,56 @@ export default function TeacherDashboard() {
     priority_early_finish: 0, priority_no_gaps: 0, priority_free_day: 0, priority_consecutive: 0,
   });
 
+  // ---- real school timeslots (drives the grid dynamically) ----
+  const [timeslots, setTimeslots] = useState([]);
+
+  // ---- AI free-text preferences parsing ----
+  const [aiText, setAiText] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [aiPreview, setAiPreview] = useState(null);
+
   // ---- my published schedule (port 8001) ----
   const [myEntries, setMyEntries] = useState([]);
   const [myRun, setMyRun] = useState(null);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleError, setScheduleError] = useState('');
   const unreadCount = notifications.filter(n => !n.is_read).length;
+
+  // ---- derived lookups from the real timeslots table ----
+  // key `${day_of_week}-${hour_of_day}` -> timeslot id
+  const timeslotByDayHour = useMemo(() => {
+    const map = {};
+    timeslots.forEach(t => { map[`${t.day_of_week}-${t.hour_of_day}`] = t.id; });
+    return map;
+  }, [timeslots]);
+
+  // timeslot id -> {day_of_week, hour_of_day}
+  const timeslotById = useMemo(() => {
+    const map = {};
+    timeslots.forEach(t => { map[t.id] = t; });
+    return map;
+  }, [timeslots]);
+
+  // day_of_week (1-6) -> sorted array of valid hours for that day
+  const hoursByDay = useMemo(() => {
+    const map = {};
+    timeslots.forEach(t => {
+      if (!map[t.day_of_week]) map[t.day_of_week] = [];
+      map[t.day_of_week].push(t.hour_of_day);
+    });
+    Object.keys(map).forEach(d => map[d].sort((a, b) => a - b));
+    return map;
+  }, [timeslots]);
+
+  // The tallest column determines how many grid rows we render; days with
+  // fewer hours (e.g. a short Friday) simply leave their extra cells blank.
+  const maxHour = useMemo(() => {
+    if (!timeslots.length) return 8; // sensible fallback while loading
+    return Math.max(...timeslots.map(t => t.hour_of_day));
+  }, [timeslots]);
+
+  const hoursRange = useMemo(() => Array.from({ length: maxHour }, (_, i) => i + 1), [maxHour]);
 
   useEffect(() => {
     if (user) {
@@ -194,21 +233,29 @@ export default function TeacherDashboard() {
     getMySubjects().then(r => setMySubjects(r.data.map(s => s.subject_id))).catch(() => { });
     getStudentGroups().then(r => setGroups(r.data)).catch(() => { });
     getMyNotifications().then(r => setNotifications(r.data)).catch(() => { });
+    getTimeslots().then(r => setTimeslots(r.data)).catch(() => { });
   }, []);
+
+  // Rebuild the availability grid's cellStates whenever the raw constraints
+  // list or the real timeslot definitions change (order-independent).
+  useEffect(() => {
+    if (!timeslots.length) return;
+    const states = {};
+    constraintsRaw.forEach(c => {
+      const slot = timeslotById[c.timeslot_id];
+      if (!slot) return;
+      const dayIdx = slot.day_of_week - 1;
+      const key = `${dayIdx}-${slot.hour_of_day}`;
+      const stateByApiType = { hard: 'unavailable', soft: 'preferred_not' };
+      states[key] = { state: stateByApiType[c.constraint_type] || 'preferred_not', id: c.id, reason: c.reason || '' };
+    });
+    setCellStates(states);
+  }, [constraintsRaw, timeslots, timeslotById]);
 
   useEffect(() => {
     if (activeTab === 'constraints') {
       getActiveWindow().then(r => { setActiveWindow(r.data); setWindowLoaded(true); }).catch(() => { setActiveWindow(null); setWindowLoaded(true); });
-      getMyConstraints().then(r => {
-        setConstraints(r.data);
-        const states = {};
-        r.data.forEach(c => {
-          const key = `${Math.floor((c.timeslot_id - 1) / 8)}-${((c.timeslot_id - 1) % 8) + 1}`;
-          const stateByApiType = { hard: 'unavailable', soft: 'preferred_not' };
-          states[key] = { state: stateByApiType[c.constraint_type] || 'preferred_not', id: c.id, reason: c.reason || '' };
-        });
-        setCellStates(states);
-      });
+      getMyConstraints().then(r => setConstraintsRaw(r.data)).catch(() => { });
       getMyGradeLevels().then(r => setMyGradeLevels(r.data.map(g => g.grade_level))).catch(() => { });
       getMyHomeroomPref().then(r => {
         if (r.data && r.data.id) {
@@ -277,7 +324,9 @@ export default function TeacherDashboard() {
   const handleCellClick = async (dayIdx, hour) => {
     const key = `${dayIdx}-${hour}`;
     const current = cellStates[key];
-    const timeslot_id = dayIdx * 8 + hour;
+    const day_of_week = dayIdx + 1;
+    const timeslot_id = timeslotByDayHour[`${day_of_week}-${hour}`];
+    if (!timeslot_id) return; // not a real slot for this school, safety guard
 
     // empty -> prefers-not (soft) -> cannot (hard) -> empty
     if (!current) {
@@ -297,7 +346,9 @@ export default function TeacherDashboard() {
   const handleQuickPick = async (dayIdx, hour, targetState) => {
     const key = `${dayIdx}-${hour}`;
     const current = cellStates[key];
-    const timeslot_id = dayIdx * 8 + hour;
+    const day_of_week = dayIdx + 1;
+    const timeslot_id = timeslotByDayHour[`${day_of_week}-${hour}`];
+    if (!timeslot_id) { setQuickPick(null); return; } // not a real slot, safety guard
 
     if (current) await deleteConstraint(current.id);
 
@@ -439,6 +490,95 @@ export default function TeacherDashboard() {
       showGroup: true,
     });
   };
+
+  // ---- AI free-text preferences: analyze + confirm + cancel ----
+  const handleAnalyzeAI = async () => {
+    if (!aiText.trim()) return;
+    setAiLoading(true);
+    setAiError('');
+    setAiPreview(null);
+    try {
+      const res = await parseConstraintsAI(aiText);
+      setAiPreview(res.data.result);
+    } catch (e) {
+      setAiError('הניתוח נכשל, נסה לנסח מחדש');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleConfirmAI = async () => {
+    if (!aiPreview) return;
+
+    // Constraints — reuse the existing quick-pick handler so each one goes
+    // through the exact same create/delete flow as the manual grid clicks.
+    for (const c of (aiPreview.constraints || [])) {
+      const dayIdx = c.day - 1;
+      await handleQuickPick(dayIdx, c.hour, c.type);
+    }
+
+    // Priority toggles
+    const p = aiPreview.preferences || {};
+    const hasPrefUpdates = Object.values(p).some(v => v !== null && v !== undefined);
+    if (hasPrefUpdates) {
+      const next = {
+        ...preferences,
+        ...(p.priority_early_finish != null && { priority_early_finish: p.priority_early_finish }),
+        ...(p.priority_no_gaps != null && { priority_no_gaps: p.priority_no_gaps }),
+        ...(p.priority_free_day != null && { priority_free_day: p.priority_free_day }),
+        ...(p.priority_consecutive != null && { priority_consecutive: p.priority_consecutive }),
+      };
+      setPreferences(next);
+      savePreferences(next);
+    }
+
+    // Subjects — match the returned exact names to real subject objects.
+    for (const subjectName of (aiPreview.subjects || [])) {
+      const subject = subjects.find(s => s.subject_name === subjectName);
+      if (subject && !mySubjects.includes(subject.id)) {
+        handleToggleSubject(subject);
+      }
+    }
+
+    // Grade levels
+    for (const grade of (aiPreview.grade_levels || [])) {
+      if (!myGradeLevels.includes(grade)) {
+        setMyGradeLevels(prev => [...prev, grade]);
+        addMyGradeLevel(grade).catch(() => setMyGradeLevels(prev => prev.filter(g => g !== grade)));
+      }
+    }
+
+    // Homeroom
+    const hr = aiPreview.homeroom;
+    if (hr && hr.wants_homeroom !== null && hr.wants_homeroom !== undefined) {
+      let preferred_group_id = homeroomPref.preferred_group_id;
+      if (hr.preferred_group_name) {
+        const group = groups.find(g => g.group_name === hr.preferred_group_name);
+        if (group) preferred_group_id = group.id;
+      }
+      const next = {
+        wants_homeroom: hr.wants_homeroom,
+        preferred_group_id: hr.wants_homeroom ? preferred_group_id : null,
+      };
+      setHomeroomPref(next);
+      saveHomeroom(next);
+    }
+
+    setAiPreview(null);
+    setAiText('');
+  };
+
+  const handleCancelAI = () => {
+    setAiPreview(null);
+  };
+
+  const aiPreviewIsEmpty = aiPreview && (
+    (aiPreview.constraints || []).length === 0 &&
+    (aiPreview.subjects || []).length === 0 &&
+    (aiPreview.grade_levels || []).length === 0 &&
+    (!aiPreview.homeroom || aiPreview.homeroom.wants_homeroom === null || aiPreview.homeroom.wants_homeroom === undefined) &&
+    (aiPreview.unmapped || []).length === 0
+  );
 
   const PriorityToggle = ({ label, field }) => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0', borderBottom: '1px solid #f0ebe3' }}>
@@ -587,6 +727,64 @@ export default function TeacherDashboard() {
                   {prefsSaved ? '✓ ההעדפות נשמרו' : 'כל שינוי נשמר אוטומטית'}
                 </div>
 
+                {/* מילוי מהיר בעזרת AI — בראש הטופס */}
+                {AI_FEATURE_ENABLED && (
+                  <div style={styles.card}>
+                    <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '4px' }}>מילוי מהיר בעזרת AI</div>
+                    <div style={{ fontSize: '12px', color: '#8a7a6e', marginBottom: '16px' }}>
+                      כתבו במילים שלכם את האילוצים וההעדפות למערכת השעות. ההעדפות שלכם יתורגמו אוטומטית לשדות המתאימים בטופס ותוכלו לבדוק ולשנות אותן לפני האישור.
+                    </div>
+                    <textarea
+                      value={aiText}
+                      onChange={e => setAiText(e.target.value)}
+                      style={{ ...styles.input, height: '80px', resize: 'none', marginBottom: '12px' }}
+                      placeholder='לדוגמה: אני לא יכול/ה לעבוד בימי שני, מעדיפ/ה לסיים מוקדם ברביעי. ההכשרה שלי היא חשבון ואנגלית'
+                    />
+                    <button onClick={handleAnalyzeAI} disabled={aiLoading || !aiText.trim()} style={{ ...styles.btnSave, opacity: (aiLoading || !aiText.trim()) ? 0.6 : 1 }}>
+                      <i className="ti ti-sparkles" aria-hidden="true"></i> {aiLoading ? 'מנתח...' : 'הציגו לי מה הבנתם'}
+                    </button>
+                    {aiError && <div style={{ fontSize: '12px', color: '#c0705a', marginTop: '10px' }}>{aiError}</div>}
+
+                    {aiPreview && (
+                      <div style={{ marginTop: '20px', backgroundColor: '#F5F8F2', borderRadius: '10px', padding: '16px' }}>
+                        <div style={{ fontSize: '13px', color: '#4a3f35', marginBottom: '10px' }}>כך הבנתי את הבקשה — אשר/י שזה נכון:</div>
+
+                        {aiPreviewIsEmpty ? (
+                          <div style={{ fontSize: '13px', color: '#8a7a6e' }}>לא זוהה תוכן בטקסט.</div>
+                        ) : (
+                          <ul style={{ margin: 0, paddingRight: '18px', fontSize: '13px', color: '#4a3f35' }}>
+                            {(aiPreview.constraints || []).map((c, i) => (
+                              <li key={`c-${i}`}>{DAYS[c.day - 1]}, שיעור {c.hour} — {STATE_LABELS[c.type]}</li>
+                            ))}
+                            {(aiPreview.subjects || []).map((s, i) => (
+                              <li key={`s-${i}`}>מקצוע: {s}</li>
+                            ))}
+                            {(aiPreview.grade_levels || []).map((g, i) => (
+                              <li key={`g-${i}`}>שכבת גיל: כיתה {GRADE_LABELS[g] || g}</li>
+                            ))}
+                            {aiPreview.homeroom?.wants_homeroom === true && (
+                              <li>רוצה לחנך{aiPreview.homeroom.preferred_group_name ? ` — כיתה ${aiPreview.homeroom.preferred_group_name}` : ''}</li>
+                            )}
+                            {aiPreview.homeroom?.wants_homeroom === false && (
+                              <li>לא רוצה לחנך</li>
+                            )}
+                          </ul>
+                        )}
+
+                        {(aiPreview.unmapped || []).length > 0 && (
+                          <div style={{ marginTop: '10px', fontSize: '12px', color: '#a08c30' }}>
+                            לא הצלחתי להבין: {aiPreview.unmapped.join(', ')}
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', gap: '10px', marginTop: '14px' }}>
+                          <button onClick={handleConfirmAI} style={styles.btnSave}>אשר והחל</button>
+                          <button onClick={handleCancelAI} style={styles.btnOutline}>בטל</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div style={styles.card}>
                   <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '20px' }}>נתוני הוראה</div>
 
@@ -696,10 +894,16 @@ export default function TeacherDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {HOURS.map(hour => (
+                        {hoursRange.map(hour => (
                           <tr key={hour}>
                             <td style={{ padding: '8px 12px', color: '#c8baa6', whiteSpace: 'nowrap' }}>שיעור {hour}</td>
                             {DAYS.map((day, dayIdx) => {
+                              const day_of_week = dayIdx + 1;
+                              const isValidSlot = (hoursByDay[day_of_week] || []).includes(hour);
+                              if (!isValidSlot) {
+                                // This day simply doesn't have this many lessons — leave blank.
+                                return <td key={day} style={{ padding: '4px 8px' }}></td>;
+                              }
                               const key = `${dayIdx}-${hour}`;
                               const cell = cellStates[key];
                               const state = cell?.state || 'free';
@@ -725,20 +929,6 @@ export default function TeacherDashboard() {
                       </tbody>
                     </table>
                   </div>
-                </div>
-
-                <div style={styles.card}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <div style={{ fontSize: '15px', color: '#4a3f35' }}>הזן אילוצים בשפה חופשית</div>
-                    <span style={{ fontSize: '11px', color: '#a08c30', backgroundColor: '#FFF3A3', border: '1px solid #e8d88a', borderRadius: '20px', padding: '2px 10px' }}>בקרוב</span>
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#8a7a6e', marginBottom: '16px' }}>
-                    בקרוב ניתן יהיה לכתוב, למשל: "אני לא יכול ביום שני", ולתרגם זאת אוטומטית לאילוצים בלוח הזמינות למעלה.
-                  </div>
-                  <textarea disabled placeholder='לדוגמה: "אני לא יכול ביום שני, ומעדיף שלא בשיעור האחרון בימי רביעי"' style={{ ...styles.input, height: '80px', resize: 'none', marginBottom: '12px', opacity: 0.6, cursor: 'not-allowed' }} />
-                  <button disabled style={{ ...styles.btnSave, opacity: 0.5, cursor: 'not-allowed' }}>
-                    <i className="ti ti-sparkles" aria-hidden="true"></i> נתח עם AI (בקרוב)
-                  </button>
                 </div>
 
                 <div style={styles.card}>
@@ -866,10 +1056,14 @@ export default function TeacherDashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {HOURS.map(hour => (
+                      {hoursRange.map(hour => (
                         <tr key={hour}>
                           <td style={styles.gridHourCell}>שיעור {hour}</td>
                           {DAY_ORDER.map(day => {
+                            const isValidSlot = (hoursByDay[day] || []).includes(hour);
+                            if (!isValidSlot) {
+                              return <td key={day} style={{ ...styles.gridCell, backgroundColor: 'transparent', border: 'none' }}></td>;
+                            }
                             const lessons = scheduleCell(day, hour);
                             return (
                               <td key={day} style={styles.gridCell}>
