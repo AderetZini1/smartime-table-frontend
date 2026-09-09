@@ -190,4 +190,8 @@ export const createCurriculumRequirement = (data) => api.post('/curriculum-requi
 export const updateCurriculumRequirement = (id, data) => api.patch(`/curriculum-requirements/${id}`, data);
 export const deleteCurriculumRequirement = (id) => api.delete(`/curriculum-requirements/${id}`);
 
+// Submission Windows
+export const getMySubmissionStatus = () => api.get('/submission-windows/active/my-status');
+export const submitMyPreferences = () => api.post('/submission-windows/active/submit');
+
 export default api;
