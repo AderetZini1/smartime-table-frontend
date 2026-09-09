@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { updateTeacher, getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule, getMyPreferences, saveMyPreferences, getMyNotifications, markNotificationRead, parseConstraintsAI, getTimeslots } from '../services/api';
+import { updateTeacher, getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule, getMyPreferences, saveMyPreferences, getMyNotifications, markNotificationRead, parseConstraintsAI, getTimeslots, getMySubmissionStatus, submitMyPreferences } from '../services/api';
 import { exportSingleSchedule } from '../utils/exportSchedule';
 import { useNavigate } from 'react-router-dom';
 import { exportSinglePDF } from '../utils/exportSchedulePDF';
@@ -9,11 +9,26 @@ const DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 
 const GRADES = [1, 2, 3, 4, 5, 6];
 const GRADE_LABELS = { 1: "א'", 2: "ב'", 3: "ג'", 4: "ד'", 5: "ה'", 6: "ו'" };
 
-// For the "my schedule" grid: day_of_week 1..6 -> Hebrew name
 const DAY_NAMES_BY_NUM = { 1: 'ראשון', 2: 'שני', 3: 'שלישי', 4: 'רביעי', 5: 'חמישי', 6: 'שישי' };
 const DAY_ORDER = [1, 2, 3, 4, 5, 6];
 
-// dd.mm.yyyy from an ISO timestamp
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function isValidIsraeliPhone(value) {
+  const digits = value.replace(/[^\d]/g, '');
+  return /^0\d{8,9}$/.test(digits);
+}
+
+function getContrastText(hex) {
+  if (!hex || hex[0] !== '#' || hex.length !== 7) return '#4a3f35';
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  if ([r, g, b].some(Number.isNaN)) return '#4a3f35';
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6 ? '#4a3f35' : '#ffffff';
+}
+
 function fmtDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -37,8 +52,6 @@ const CELL_COLORS = {
 
 const STATE_LABELS = { preferred_not: 'מעדיף שלא', unavailable: 'לא יכול' };
 
-// AI-powered free-text preferences parsing is wired up to the backend
-// (/ai/parse-preferences) and services/api.js's parseConstraintsAI.
 const AI_FEATURE_ENABLED = true;
 
 const styles = {
@@ -55,6 +68,7 @@ const styles = {
   content: { maxWidth: '980px', margin: '0 auto' },
   card: { backgroundColor: '#fff', borderRadius: '14px', border: '1px solid #e2dacc', padding: '28px', marginBottom: '26px' },
   input: { width: '100%', padding: '12px 15px', border: '1px solid #e2dacc', borderRadius: '8px', fontSize: '15px', color: '#4a3f35', backgroundColor: '#FAF7F2', outline: 'none', boxSizing: 'border-box', fontFamily: 'Varela Round, sans-serif' },
+  selectCompact: { padding: '12px 15px', border: '1px solid #e2dacc', borderRadius: '8px', fontSize: '15px', color: '#4a3f35', backgroundColor: '#FAF7F2', outline: 'none', boxSizing: 'border-box', fontFamily: 'Varela Round, sans-serif', width: 'auto', minWidth: '160px' },
   label: { display: 'block', fontSize: '13px', color: '#8a7a6e', marginBottom: '7px' },
   readonlyField: { width: '100%', padding: '12px 15px', border: '1px solid #f0ebe3', borderRadius: '8px', fontSize: '15px', color: '#4a3f35', backgroundColor: '#f9f6f1', boxSizing: 'border-box' },
   btnSave: { backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px 22px', fontSize: '15px', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif' },
@@ -77,7 +91,6 @@ const TABS = [
 const statusLabel = (s) => ({ pending: 'ממתין', approved: 'אושר', rejected: 'נדחה' }[s] || s);
 const statusColor = (s) => ({ pending: '#c8baa6', approved: '#8a9e78', rejected: '#c0705a' }[s] || '#c8baa6');
 
-// Small on/off toggle switch (RTL: knob sits right when ON)
 function Toggle({ on, onClick }) {
   return (
     <button onClick={onClick} type="button" style={{
@@ -93,7 +106,15 @@ function Toggle({ on, onClick }) {
   );
 }
 
-// ── קומפוננטה: רשת מקצועות עם checkboxes ──────────────────────────────────
+function InfoRow({ label, value }) {
+  return (
+    <div style={{ padding: '13px 0', borderBottom: '1px solid #f0ebe3' }}>
+      <div style={{ fontSize: '12px', color: '#c8baa6', marginBottom: '4px' }}>{label}</div>
+      <div style={{ fontSize: '15px', color: '#4a3f35' }}>{value || '—'}</div>
+    </div>
+  );
+}
+
 function SubjectCheckboxGrid({ subjects, mySubjects, onToggle }) {
   const columns = [[], [], []];
   subjects.forEach((s, i) => columns[i % 3].push(s));
@@ -156,6 +177,7 @@ export default function TeacherDashboard() {
   const [requestSent, setRequestSent] = useState(false);
   const [profile, setProfile] = useState({ first_name: '', last_name: '', email: '', phone_number: '' });
   const [profileBaseline, setProfileBaseline] = useState({ first_name: '', last_name: '', email: '', phone_number: '' });
+  const [profileEditing, setProfileEditing] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [hasNewNotification, setHasNewNotification] = useState(false);
   const prevAnsweredCount = useRef(0);
@@ -172,38 +194,34 @@ export default function TeacherDashboard() {
     priority_early_finish: 0, priority_no_gaps: 0, priority_free_day: 0, priority_consecutive: 0,
   });
 
-  // ---- real school timeslots (drives the grid dynamically) ----
   const [timeslots, setTimeslots] = useState([]);
 
-  // ---- AI free-text preferences parsing ----
   const [aiText, setAiText] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
   const [aiPreview, setAiPreview] = useState(null);
 
-  // ---- my published schedule (port 8001) ----
+  const [submissionStatus, setSubmissionStatus] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
   const [myEntries, setMyEntries] = useState([]);
   const [myRun, setMyRun] = useState(null);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleError, setScheduleError] = useState('');
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  // ---- derived lookups from the real timeslots table ----
-  // key `${day_of_week}-${hour_of_day}` -> timeslot id
   const timeslotByDayHour = useMemo(() => {
     const map = {};
     timeslots.forEach(t => { map[`${t.day_of_week}-${t.hour_of_day}`] = t.id; });
     return map;
   }, [timeslots]);
 
-  // timeslot id -> {day_of_week, hour_of_day}
   const timeslotById = useMemo(() => {
     const map = {};
     timeslots.forEach(t => { map[t.id] = t; });
     return map;
   }, [timeslots]);
 
-  // day_of_week (1-6) -> sorted array of valid hours for that day
   const hoursByDay = useMemo(() => {
     const map = {};
     timeslots.forEach(t => {
@@ -214,10 +232,8 @@ export default function TeacherDashboard() {
     return map;
   }, [timeslots]);
 
-  // The tallest column determines how many grid rows we render; days with
-  // fewer hours (e.g. a short Friday) simply leave their extra cells blank.
   const maxHour = useMemo(() => {
-    if (!timeslots.length) return 8; // sensible fallback while loading
+    if (!timeslots.length) return 8;
     return Math.max(...timeslots.map(t => t.hour_of_day));
   }, [timeslots]);
 
@@ -239,8 +255,6 @@ export default function TeacherDashboard() {
     getTimeslots().then(r => setTimeslots(r.data)).catch(() => { });
   }, []);
 
-  // Rebuild the availability grid's cellStates whenever the raw constraints
-  // list or the real timeslot definitions change (order-independent).
   useEffect(() => {
     if (!timeslots.length) return;
     const states = {};
@@ -279,6 +293,7 @@ export default function TeacherDashboard() {
           }));
         }
       }).catch(() => { });
+      getMySubmissionStatus().then(r => setSubmissionStatus(r.data)).catch(() => { setSubmissionStatus(null); });
     }
     if (activeTab === 'requests') {
       getMyRequests().then(r => setRequests(r.data));
@@ -304,7 +319,6 @@ export default function TeacherDashboard() {
       getMyRequests().then(r => {
         const answered = r.data.filter(req => req.status !== 'pending' && req.admin_response);
         if (firstRun) {
-          // establish the baseline without flagging existing answers as "new"
           prevAnsweredCount.current = answered.length;
           firstRun = false;
         } else if (answered.length > prevAnsweredCount.current) {
@@ -316,20 +330,17 @@ export default function TeacherDashboard() {
         if (activeTab === 'requests') setRequests(r.data);
       }).catch(() => { });
     };
-    check();                             // run once immediately (sets baseline)
+    check();
     const interval = setInterval(check, 30000);
     return () => clearInterval(interval);
   }, [activeTab]);
 
-  // handleQuickPick now accepts an options object so automated flows (like
-  // AI confirmation) can suppress the "reason" modal, while manual grid
-  // clicks still get it as before.
   const handleQuickPick = async (dayIdx, hour, targetState, { skipReasonModal = false } = {}) => {
     const key = `${dayIdx}-${hour}`;
     const current = cellStates[key];
     const day_of_week = dayIdx + 1;
     const timeslot_id = timeslotByDayHour[`${day_of_week}-${hour}`];
-    if (!timeslot_id) { setQuickPick(null); return; } // not a real slot, safety guard
+    if (!timeslot_id) { setQuickPick(null); return; }
 
     if (current) await deleteConstraint(current.id);
 
@@ -353,9 +364,8 @@ export default function TeacherDashboard() {
     const current = cellStates[key];
     const day_of_week = dayIdx + 1;
     const timeslot_id = timeslotByDayHour[`${day_of_week}-${hour}`];
-    if (!timeslot_id) return; // not a real slot for this school, safety guard
+    if (!timeslot_id) return;
 
-    // empty -> prefers-not (soft) -> cannot (hard) -> empty
     if (!current) {
       const res = await createConstraint({ teacher_id: user.id, timeslot_id, weight: 1, constraint_type: 'soft' });
       setCellStates(prev => ({ ...prev, [key]: { state: 'preferred_not', id: res.data.id, reason: '' } }));
@@ -384,7 +394,6 @@ export default function TeacherDashboard() {
     });
   };
 
-  // Apply the "all / unread" filter and sort newest-first (the "date" tab uses the same sort).
   const getFilteredNotifications = () => {
     let filtered = [...notifications];
     if (notifFilter === 'unread') {
@@ -404,22 +413,31 @@ export default function TeacherDashboard() {
     setTimeout(() => setRequestSent(false), 3000);
   };
 
-  // Homeroom now auto-saves on every change (no button).
   const saveHomeroom = async (next) => {
     try { await saveMyHomeroomPref(next); } catch (e) { /* silent */ }
   };
 
   const profileDirty = JSON.stringify(profile) !== JSON.stringify(profileBaseline);
-  const [profileErrors, setProfileErrors] = useState({ first_name: false, last_name: false });
+  const [profileErrors, setProfileErrors] = useState({ first_name: false, last_name: false, email: false, phone_number: false });
 
   const handleSaveProfile = async () => {
     const fn = profile.first_name.trim();
     const ln = profile.last_name.trim();
-    if (!fn || !ln) {
-      setProfileErrors({ first_name: !fn, last_name: !ln });
+    const emailVal = profile.email.trim();
+    const phoneVal = profile.phone_number.trim();
+
+    const errors = {
+      first_name: !fn,
+      last_name: !ln,
+      email: !emailVal || !EMAIL_REGEX.test(emailVal),
+      phone_number: phoneVal.length > 0 && !isValidIsraeliPhone(phoneVal),
+    };
+
+    if (errors.first_name || errors.last_name || errors.email || errors.phone_number) {
+      setProfileErrors(errors);
       return;
     }
-    setProfileErrors({ first_name: false, last_name: false });
+    setProfileErrors({ first_name: false, last_name: false, email: false, phone_number: false });
     try {
       await updateTeacher(user.id, {
         first_name: profile.first_name,
@@ -429,27 +447,26 @@ export default function TeacherDashboard() {
       });
       setProfileBaseline(profile);
       setProfileSaved(true);
+      setProfileEditing(false);
       setTimeout(() => setProfileSaved(false), 2000);
     } catch (e) { /* silent */ }
   };
 
-  const handleCancelProfile = () => setProfile(profileBaseline);
+  const handleCancelProfile = () => {
+    setProfile(profileBaseline);
+    setProfileErrors({ first_name: false, last_name: false, email: false, phone_number: false });
+    setProfileEditing(false);
+  };
 
   const handleToggleSubject = (subject) => {
     const selected = mySubjects.includes(subject.id);
-    // Optimistic: flip the UI immediately, then sync to the server.
-    // This also prevents the rapid-click duplicate-add (400) bug.
     setMySubjects(prev => selected ? prev.filter(id => id !== subject.id) : [...prev, subject.id]);
     const call = selected ? removeMySubject(subject.id) : addMySubject(subject.id);
     call.catch(() => {
-      // revert if the server rejected it
       setMySubjects(prev => selected ? [...prev, subject.id] : prev.filter(id => id !== subject.id));
     });
   };
 
-  // Preferences auto-save. Weekly-hours (min/max) and the "consecutive
-  // lessons" preference are set by the school admin, not the teacher, so
-  // they're intentionally excluded from this payload.
   const savePreferences = async (p) => {
     try {
       await saveMyPreferences({
@@ -467,6 +484,17 @@ export default function TeacherDashboard() {
     const next = { ...preferences, [field]: preferences[field] ? 0 : 1 };
     setPreferences(next);
     savePreferences(next);
+  };
+
+  const handleSubmitForm = async () => {
+    setSubmitting(true);
+    try {
+      const res = await submitMyPreferences();
+      setSubmissionStatus(res.data);
+    } catch (e) { /* silent */ }
+    finally {
+      setSubmitting(false);
+    }
   };
 
   const scheduleCell = (day, hour) => myEntries.filter(e => e.day_of_week === day && e.hour_of_day === hour);
@@ -487,7 +515,6 @@ export default function TeacherDashboard() {
     });
   };
 
-  // ---- AI free-text preferences: analyze + confirm + cancel ----
   const handleAnalyzeAI = async () => {
     if (!aiText.trim()) return;
     setAiLoading(true);
@@ -506,15 +533,11 @@ export default function TeacherDashboard() {
   const handleConfirmAI = async () => {
     if (!aiPreview) return;
 
-    // Constraints — reuse the existing quick-pick handler so each one goes
-    // through the exact same create/delete flow as the manual grid clicks,
-    // but skip the per-cell "reason" modal so it doesn't pop repeatedly.
     for (const c of (aiPreview.constraints || [])) {
       const dayIdx = c.day - 1;
       await handleQuickPick(dayIdx, c.hour, c.type, { skipReasonModal: true });
     }
 
-    // Priority toggles
     const p = aiPreview.preferences || {};
     const hasPrefUpdates = Object.values(p).some(v => v !== null && v !== undefined);
     if (hasPrefUpdates) {
@@ -529,7 +552,6 @@ export default function TeacherDashboard() {
       savePreferences(next);
     }
 
-    // Subjects — match the returned exact names to real subject objects.
     for (const subjectName of (aiPreview.subjects || [])) {
       const subject = subjects.find(s => s.subject_name === subjectName);
       if (subject && !mySubjects.includes(subject.id)) {
@@ -537,7 +559,6 @@ export default function TeacherDashboard() {
       }
     }
 
-    // Grade levels
     for (const grade of (aiPreview.grade_levels || [])) {
       if (!myGradeLevels.includes(grade)) {
         setMyGradeLevels(prev => [...prev, grade]);
@@ -545,7 +566,6 @@ export default function TeacherDashboard() {
       }
     }
 
-    // Homeroom
     const hr = aiPreview.homeroom;
     if (hr && hr.wants_homeroom !== null && hr.wants_homeroom !== undefined) {
       let preferred_group_id = homeroomPref.preferred_group_id;
@@ -584,8 +604,24 @@ export default function TeacherDashboard() {
     </div>
   );
 
+  const displayName = `${profileBaseline.first_name || ''} ${profileBaseline.last_name || ''}`.trim() || 'ללא שם';
+  const profileInitials = `${(profileBaseline.first_name || '')[0] || ''}${(profileBaseline.last_name || '')[0] || ''}`;
+  const avatarBg = user?.teacher_color || '#EDF4E8';
+  const avatarFg = getContrastText(avatarBg);
+
   return (
     <div style={styles.layout}>
+      <style>{`
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover,
+        input:-webkit-autofill:focus {
+          -webkit-box-shadow: 0 0 0 1000px #FAF7F2 inset !important;
+          box-shadow: 0 0 0 1000px #FAF7F2 inset !important;
+          -webkit-text-fill-color: #4a3f35 !important;
+          caret-color: #4a3f35;
+          transition: background-color 9999s ease-in-out 0s;
+        }
+      `}</style>
       <div style={styles.sidebar}>
         <div style={{ padding: '0 26px', marginBottom: '34px' }}>
           <div style={styles.brand}>SMARTIME</div>
@@ -626,44 +662,79 @@ export default function TeacherDashboard() {
             <div style={{ width: '30px', height: '2px', backgroundColor: '#8a9e78', marginTop: '10px' }}></div>
           </div>
 
-          {/* פרופיל */}
           {activeTab === 'profile' && (
-            <div style={styles.card}>
-              <div style={{ fontSize: '13px', color: '#c8baa6', marginBottom: '20px' }}>
-                ניתן לעדכן את הפרטים האישיים. השינויים יישמרו לאחר לחיצה על "שמור שינויים".
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px', marginBottom: '18px' }}>
-                <div>
-                  <label style={styles.label}>שם פרטי</label>
-                  <input style={{ ...styles.input, borderColor: profileErrors.first_name ? '#c0705a' : undefined, backgroundColor: profileErrors.first_name ? '#fff8f6' : undefined }} value={profile.first_name} onChange={e => { setProfile(p => ({ ...p, first_name: e.target.value })); if (profileErrors.first_name) setProfileErrors(p => ({ ...p, first_name: false })); }} />
-                  {profileErrors.first_name && <div style={{ fontSize: '12px', color: '#c0705a', marginTop: '5px' }}>נא להזין שם פרטי</div>}
+            <div style={{ ...styles.card, maxWidth: '400px', margin: '0 auto' }}>
+              <div style={{ textAlign: 'center', marginBottom: '22px' }}>
+                <div style={{
+                  width: '92px', height: '92px', borderRadius: '50%', margin: '0 auto 16px',
+                  backgroundColor: avatarBg, color: avatarFg,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '30px', fontWeight: 600,
+                }}>
+                  {profileInitials || <i className="ti ti-user" style={{ fontSize: '32px' }} aria-hidden="true"></i>}
                 </div>
-                <div>
-                  <label style={styles.label}>שם משפחה</label>
-                  <input style={{ ...styles.input, borderColor: profileErrors.last_name ? '#c0705a' : undefined, backgroundColor: profileErrors.last_name ? '#fff8f6' : undefined }} value={profile.last_name} onChange={e => { setProfile(p => ({ ...p, last_name: e.target.value })); if (profileErrors.last_name) setProfileErrors(p => ({ ...p, last_name: false })); }} />
-                  {profileErrors.last_name && <div style={{ fontSize: '12px', color: '#c0705a', marginTop: '5px' }}>נא להזין שם משפחה</div>}
-                </div>
-              </div>
-              <div style={{ marginBottom: '18px' }}>
-                <label style={styles.label}>אימייל</label>
-                <input style={styles.input} value={profile.email} onChange={e => setProfile(p => ({ ...p, email: e.target.value }))} />
-              </div>
-              <div>
-                <label style={styles.label}>טלפון</label>
-                <input style={styles.input} value={profile.phone_number} onChange={e => setProfile(p => ({ ...p, phone_number: e.target.value }))} placeholder="05X-XXXXXXX" />
+                <div style={{ fontSize: '20px', fontWeight: 600, color: '#4a3f35' }}>{displayName}</div>
+                <div style={{ fontSize: '13px', color: '#8a7a6e', marginTop: '3px' }}>{profileBaseline.email}</div>
               </div>
 
-              {(profileDirty || profileSaved) && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginTop: '26px', paddingTop: '18px', borderTop: '1px solid #f0ebe3' }}>
-                  {profileDirty && (
-                    <>
+              <div style={{ borderTop: '1px solid #f0ebe3', paddingTop: '6px' }}>
+                {!profileEditing ? (
+                  <>
+                    <InfoRow label="שם פרטי" value={profileBaseline.first_name} />
+                    <InfoRow label="שם משפחה" value={profileBaseline.last_name} />
+                    <InfoRow label="אימייל" value={profileBaseline.email} />
+                    <InfoRow label="טלפון" value={profileBaseline.phone_number} />
+
+                    <div style={{ textAlign: 'center', marginTop: '20px' }}>
+                      <button onClick={() => setProfileEditing(true)} style={styles.btnOutline}>
+                        <i className="ti ti-edit" aria-hidden="true"></i> ערוך פרטים
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ paddingTop: '14px' }}>
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={styles.label}>שם פרטי</label>
+                      <input autoComplete="off" style={{ ...styles.input, borderColor: profileErrors.first_name ? '#c0705a' : undefined, backgroundColor: profileErrors.first_name ? '#fff8f6' : undefined }} value={profile.first_name} onChange={e => { setProfile(p => ({ ...p, first_name: e.target.value })); if (profileErrors.first_name) setProfileErrors(p => ({ ...p, first_name: false })); }} />
+                      {profileErrors.first_name && <div style={{ fontSize: '12px', color: '#c0705a', marginTop: '5px' }}>נא להזין שם פרטי</div>}
+                    </div>
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={styles.label}>שם משפחה</label>
+                      <input autoComplete="off" style={{ ...styles.input, borderColor: profileErrors.last_name ? '#c0705a' : undefined, backgroundColor: profileErrors.last_name ? '#fff8f6' : undefined }} value={profile.last_name} onChange={e => { setProfile(p => ({ ...p, last_name: e.target.value })); if (profileErrors.last_name) setProfileErrors(p => ({ ...p, last_name: false })); }} />
+                      {profileErrors.last_name && <div style={{ fontSize: '12px', color: '#c0705a', marginTop: '5px' }}>נא להזין שם משפחה</div>}
+                    </div>
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={styles.label}>אימייל</label>
+                      <input
+                        autoComplete="off"
+                        type="email"
+                        style={{ ...styles.input, borderColor: profileErrors.email ? '#c0705a' : undefined, backgroundColor: profileErrors.email ? '#fff8f6' : undefined }}
+                        value={profile.email}
+                        onChange={e => { setProfile(p => ({ ...p, email: e.target.value })); if (profileErrors.email) setProfileErrors(p => ({ ...p, email: false })); }}
+                      />
+                      {profileErrors.email && <div style={{ fontSize: '12px', color: '#c0705a', marginTop: '5px' }}>נא להזין כתובת אימייל תקינה</div>}
+                    </div>
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={styles.label}>טלפון</label>
+                      <input
+                        autoComplete="off"
+                        type="tel"
+                        style={{ ...styles.input, borderColor: profileErrors.phone_number ? '#c0705a' : undefined, backgroundColor: profileErrors.phone_number ? '#fff8f6' : undefined }}
+                        value={profile.phone_number}
+                        onChange={e => { setProfile(p => ({ ...p, phone_number: e.target.value })); if (profileErrors.phone_number) setProfileErrors(p => ({ ...p, phone_number: false })); }}
+                        placeholder="05X-XXXXXXX"
+                      />
+                      {profileErrors.phone_number && <div style={{ fontSize: '12px', color: '#c0705a', marginTop: '5px' }}>מספר הטלפון אינו תקין</div>}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginTop: '20px' }}>
                       <button onClick={handleSaveProfile} style={styles.btnSave}>שמור שינויים</button>
                       <button onClick={handleCancelProfile} style={styles.btnOutline}>ביטול</button>
-                    </>
-                  )}
-                  {profileSaved && !profileDirty && <span style={{ fontSize: '14px', color: '#8a9e78' }}>✓ נשמר בהצלחה</span>}
-                </div>
-              )}
+                    </div>
+                    {profileSaved && <div style={{ fontSize: '14px', color: '#8a9e78', textAlign: 'center', marginTop: '10px' }}>✓ נשמר בהצלחה</div>}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -703,7 +774,6 @@ export default function TeacherDashboard() {
             </>
           )}
 
-          {/* העדפות שעות */}
           {activeTab === 'constraints' && (
             <>
               {!windowLoaded ? (
@@ -725,7 +795,6 @@ export default function TeacherDashboard() {
                     {prefsSaved ? '✓ ההעדפות נשמרו' : 'כל שינוי נשמר אוטומטית'}
                   </div>
 
-                  {/* מילוי מהיר בעזרת AI — בראש הטופס */}
                   {AI_FEATURE_ENABLED && (
                     <div style={styles.card}>
                       <div style={{ fontSize: '16px', color: '#4a3f35', marginBottom: '5px' }}>מילוי מהיר בעזרת AI</div>
@@ -849,7 +918,7 @@ export default function TeacherDashboard() {
                           <select
                             value={homeroomPref.preferred_group_id || ''}
                             onChange={e => { const next = { ...homeroomPref, preferred_group_id: e.target.value ? parseInt(e.target.value) : null }; setHomeroomPref(next); saveHomeroom(next); }}
-                            style={{ ...styles.input, cursor: 'pointer' }}
+                            style={{ ...styles.selectCompact, cursor: 'pointer' }}
                           >
                             <option value="">אין העדפה מיוחדת</option>
                             {groups.map(g => (
@@ -899,7 +968,6 @@ export default function TeacherDashboard() {
                                 const day_of_week = dayIdx + 1;
                                 const isValidSlot = (hoursByDay[day_of_week] || []).includes(hour);
                                 if (!isValidSlot) {
-                                  // This day simply doesn't have this many lessons — leave blank.
                                   return <td key={day} style={{ padding: '5px 9px' }}></td>;
                                 }
                                 const key = `${dayIdx}-${hour}`;
@@ -937,19 +1005,39 @@ export default function TeacherDashboard() {
                     <PriorityToggle label="יום חופשי" field="priority_free_day" />
                     <PriorityToggle label="שיעורים רצופים" field="priority_consecutive" />
                   </div>
+
+                  <div style={{ ...styles.card, textAlign: 'center' }}>
+                    {submissionStatus?.submitted ? (
+                      <div>
+                        <i className="ti ti-circle-check" style={{ fontSize: '32px', color: '#8a9e78', display: 'block', marginBottom: '10px' }} aria-hidden="true"></i>
+                        <div style={{ fontSize: '16px', color: '#4a3f35', marginBottom: '4px' }}>הטופס נשלח בהצלחה</div>
+                        <div style={{ fontSize: '13px', color: '#8a7a6e' }}>
+                          {submissionStatus.submitted_at ? `נשלח בתאריך ${fmtDate(submissionStatus.submitted_at)}` : ''}
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ fontSize: '14px', color: '#8a7a6e', marginBottom: '16px', lineHeight: 1.6 }}>
+                          לאחר שבדקתם שכל ההעדפות נכונות, אשרו את הטופס.
+                        </div>
+                        <button onClick={handleSubmitForm} disabled={submitting} style={{ ...styles.btnSave, opacity: submitting ? 0.6 : 1 }}>
+                          <i className="ti ti-send" aria-hidden="true"></i> {submitting ? 'שולח...' : 'אישור ושליחה'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </>
           )}
 
-          {/* פניות */}
           {activeTab === 'requests' && (
             <>
               <div style={styles.card}>
                 <h3 style={{ fontSize: '16px', color: '#4a3f35', marginBottom: '18px' }}>פנייה חדשה</h3>
                 <div style={{ marginBottom: '18px' }}>
                   <label style={styles.label}>סוג הפנייה</label>
-                  <select value={newRequest.request_type} onChange={e => setNewRequest({ ...newRequest, request_type: e.target.value })} style={{ ...styles.input, cursor: 'pointer' }}>
+                  <select value={newRequest.request_type} onChange={e => setNewRequest({ ...newRequest, request_type: e.target.value })} style={{ ...styles.selectCompact, cursor: 'pointer' }}>
                     {REQUEST_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>
@@ -985,7 +1073,6 @@ export default function TeacherDashboard() {
             </>
           )}
 
-          {/* מערכת השעות שלי — הגריד האמיתי מהמערכת שפורסמה */}
           {activeTab === 'schedule' && (
             <>
               {myRun && myEntries.length > 0 && (
@@ -1056,7 +1143,6 @@ export default function TeacherDashboard() {
         </div>
       </div>
 
-      {/* מודאל סיבה */}
       {reasonModal && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setReasonModal(null)}>
           <div style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1px solid #e2dacc', padding: '34px', width: '420px' }} onClick={e => e.stopPropagation()} dir="rtl">
@@ -1072,7 +1158,6 @@ export default function TeacherDashboard() {
         </div>
       )}
 
-      {/* תפריט בחירה ישירה — קליק ימני על תא */}
       {quickPick && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1100 }} onClick={() => setQuickPick(null)} onContextMenu={e => { e.preventDefault(); setQuickPick(null); }}>
           <div
