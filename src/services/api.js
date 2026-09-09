@@ -174,6 +174,7 @@ export const sendNotification = (data) => api.post('/notifications/', data);
 export const getMyNotifications = () => api.get('/notifications/me');
 export const markNotificationRead = (id) => api.patch(`/notifications/me/${id}/read`);
 export const getNotifications = () => api.get('/notifications/admin');
+export const deleteNotification = (id) => api.delete(`/notifications/${id}`);
 
 // School Settings
 export const getSchoolSettings = () => api.get('/school-settings/');
@@ -193,5 +194,4 @@ export const deleteCurriculumRequirement = (id) => api.delete(`/curriculum-requi
 // Submission Windows
 export const getMySubmissionStatus = () => api.get('/submission-windows/active/my-status');
 export const submitMyPreferences = () => api.post('/submission-windows/active/submit');
-
 export default api;
