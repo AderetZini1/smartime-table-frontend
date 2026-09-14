@@ -107,7 +107,7 @@ export const getScheduleRuns = () => api.get('/schedule-runs/');
 export const selectScheduleRun = (id) => api.patch(`/schedule-runs/${id}/select`);
 export const deleteScheduleRun = (id) => api.delete(`/schedule-runs/${id}`);
 export const updateScheduleRunNote = (id, note) => api.patch(`/schedule-runs/${id}/note`, { admin_note: note });
-
+export const getScheduleRunEntries = (runId) => api.get(`/schedule-runs/${runId}/entries`);
 
 // AI parsing of teacher preferences
 export const parseConstraintsAI = (text) =>
@@ -195,3 +195,5 @@ export const deleteCurriculumRequirement = (id) => api.delete(`/curriculum-requi
 export const getMySubmissionStatus = () => api.get('/submission-windows/active/my-status');
 export const submitMyPreferences = () => api.post('/submission-windows/active/submit');
 export default api;
+
+
