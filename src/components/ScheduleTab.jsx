@@ -341,10 +341,11 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                             <span style={{ fontSize: '13px', padding: '4px 14px', borderRadius: '20px', backgroundColor: runInfo.is_published ? '#EDF4E8' : '#FFF3D6', color: runInfo.is_published ? '#4a7c3f' : '#a08c30' }}>
                                 {runInfo.is_published ? 'פורסם' : 'טיוטה'}
                             </span>
-                            <span>נוצר ב-{fmtDate(runInfo.run_at)}</span><span>·</span>
+                            <span>נוצר ב-{fmtDate(runInfo.run_at)}</span>
+                            {/* <span>נוצר ב-{fmtDate(runInfo.run_at)}</span><span>·</span>
                             <span>{ALGO_LABELS[runInfo.algorithm] || runInfo.algorithm}</span><span>·</span>
                             <span>ציון {runInfo.score}</span><span>·</span>
-                            <span>{violationsSummary ? violationsSummary.hard + violationsSummary.soft : '—'} התנגשויות</span>
+                            <span>{violationsSummary ? violationsSummary.hard + violationsSummary.soft : '—'} התנגשויות</span> */}
                         </>
                     ) : (
                         <span>אין מערכת שעות פעילה כרגע</span>
@@ -370,7 +371,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                     {publishing ? 'מפרסם…' : (runInfo?.is_published ? 'פרסם מחדש' : 'פרסם לצוות')}
                 </button>
                 <button onClick={() => requestGenerate('improve')} disabled={generating || !runInfo} style={{ ...styles.btnOutline, padding: '13px 24px', fontSize: '16px', opacity: (generating || !runInfo) ? 0.5 : 1, cursor: (generating || !runInfo) ? 'not-allowed' : 'pointer' }}>
-                    <i className="ti ti-sparkles" aria-hidden="true"></i> שפר מערכת
+                    <i className="ti ti-sparkles" aria-hidden="true"></i> צור מערכת שעות חדשה
                 </button>
                 <button
                     onClick={() => { if (moreMenuOpen) { setMoreMenuOpen(false); } else { setMoreMenuOpen(true); } }}
@@ -448,7 +449,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                                             value={comboInput}
                                             onChange={e => { setComboInput(e.target.value); setComboOpen(true); }}
                                             onFocus={() => setComboOpen(true)}
-                                            placeholder={`חפשי והוסיפי ${DIM_LABEL[filterType]}...`}
+                                            placeholder={`חפשי ${DIM_LABEL[filterType]}, או לחצי כאן לצפייה ברשימה...`}
                                             style={{ border: 'none', outline: 'none', flex: 1, fontSize: '15px', backgroundColor: 'transparent', color: '#4a3f35', fontFamily: 'Varela Round, sans-serif' }}
                                         />
                                     </div>
@@ -663,7 +664,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                 <div onClick={() => setConfirmGenerateType(null)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
                     <div onClick={e => e.stopPropagation()} style={{ backgroundColor: '#FAF7F2', border: '1px solid #e2dacc', borderRadius: '14px', padding: '24px', width: '90%', maxWidth: '420px', boxShadow: '0 10px 30px rgba(0,0,0,0.15)' }}>
                         <h3 style={{ margin: '0 0 12px 0', fontSize: '17px', color: '#4a3f35' }}>
-                            {confirmGenerateType === 'new' ? 'ליצור מערכת שעות חדשה?' : 'לשפר את המערכת הנוכחית?'}
+                            {confirmGenerateType === 'new' ? 'ליצור מערכת שעות חדשה?' : 'לבנות מערכת חדשה?'}
                         </h3>
                         <p style={{ margin: '0 0 20px 0', fontSize: '14px', color: '#4a3f35', lineHeight: 1.6 }}>
                             התהליך עשוי לקחת עד כ-3 דקות.{confirmGenerateType === 'new' ? ' המערכת הנוכחית תישמר בהיסטוריה ולא תימחק.' : ''}
@@ -681,7 +682,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                     <div onClick={e => e.stopPropagation()} style={{ backgroundColor: '#FAF7F2', border: '1px solid #e2dacc', borderRadius: '14px', padding: '24px', width: '90%', maxWidth: '420px', boxShadow: '0 10px 30px rgba(0,0,0,0.15)' }}>
                         <h3 style={{ margin: '0 0 12px 0', fontSize: '17px', color: '#4a3f35' }}>לפרסם את המערכת לצוות?</h3>
                         <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#4a3f35', lineHeight: 1.6 }}>
-                            {entries.length} שיעורים ({ALGO_LABELS[runInfo?.algorithm] || runInfo?.algorithm}, ציון {runInfo?.score}) יהיו גלויים לכל המורים.
+                            המערכת הנוכחית תהיה גלויה לכל המורים. כל מורה יצפה במערכת האישית שלו
                         </p>
                         {violationsSummary && violationsSummary.hard > 0 && (
                             <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: '#8a3a2c', lineHeight: 1.6, backgroundColor: '#FAE8E8', border: '1px solid #f0c7c0', borderRadius: '8px', padding: '8px 12px' }}>
