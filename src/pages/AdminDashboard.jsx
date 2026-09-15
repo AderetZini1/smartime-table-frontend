@@ -908,6 +908,11 @@ export default function AdminDashboard() {
                 <option value="all">כל הנושאים</option>
                 {Object.entries(REQUEST_TYPES).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
               </select>
+              {(reqStatusFilter !== 'all' || reqTeacherFilter !== 'all' || reqTypeFilter !== 'all') && (
+                <button onClick={() => { setReqStatusFilter('all'); setReqTeacherFilter('all'); setReqTypeFilter('all'); }} style={{ ...styles.btnOutline, padding: '12px 18px', fontSize: '15px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <i className="ti ti-filter-off" aria-hidden="true"></i> נקה סינון
+                </button>
+              )}
             </div>
 
             {(() => {
@@ -1107,7 +1112,9 @@ export default function AdminDashboard() {
                 <div style={{ ...styles.card, borderTop: `4px solid ${colorForTeacher(prefTeacher.id).color}` }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px', paddingBottom: '18px', marginBottom: '18px', borderBottom: '1px solid #ece7dd' }}>
                     {!prefEditing ? (
-                      <i className="ti ti-pencil" onClick={startPrefEdit} title="ערוך" style={{ ...styles.iconBtn, fontSize: '18px', marginRight: 'auto' }} aria-hidden="true"></i>
+                      <button onClick={startPrefEdit} style={{ ...styles.btnOutline, fontSize: '13px', padding: '8px 16px', marginRight: 'auto' }}>
+                        <i className="ti ti-pencil" aria-hidden="true"></i> עריכה
+                      </button>
                     ) : (
                       <div style={{ display: 'flex', gap: '8px', marginRight: 'auto' }}>
                         <button onClick={savePrefEdit} disabled={prefSaving} style={{ backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 18px', fontSize: '13px', cursor: prefSaving ? 'default' : 'pointer', opacity: prefSaving ? 0.6 : 1 }}>
@@ -1137,10 +1144,7 @@ export default function AdminDashboard() {
 
                       {/* Subjects + grades */}
                       <div style={{ backgroundColor: '#FAF7F2', borderRadius: '10px', padding: '16px 18px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px', gap: '10px' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', borderRadius: '8px', backgroundColor: '#EDF4E8', color: '#6b8f5e' }}>
-                            <i className="ti ti-books" style={{ fontSize: '16px' }} aria-hidden="true"></i>
-                          </span>
+                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
                           <span style={{ fontSize: '14px', color: '#4a3f35', fontWeight: 700 }}>מקצועות ושכבות</span>
                         </div>
 
@@ -1202,10 +1206,7 @@ export default function AdminDashboard() {
 
                       {/* Homeroom */}
                       <div style={{ backgroundColor: '#FAF7F2', borderRadius: '10px', padding: '16px 18px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px', gap: '10px' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', borderRadius: '8px', backgroundColor: '#E8F2FA', color: '#5a8ac0' }}>
-                            <i className="ti ti-home" style={{ fontSize: '16px' }} aria-hidden="true"></i>
-                          </span>
+                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
                           <span style={{ fontSize: '14px', color: '#4a3f35', fontWeight: 700 }}>חינוך כיתה</span>
                         </div>
                         {!prefEditing ? (
@@ -1265,10 +1266,7 @@ export default function AdminDashboard() {
 
                       {/* Priority preferences */}
                       <div style={{ backgroundColor: '#FAF7F2', borderRadius: '10px', padding: '16px 18px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px', gap: '10px' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', borderRadius: '8px', backgroundColor: '#F1EAFB', color: '#8a6fc2' }}>
-                            <i className="ti ti-adjustments" style={{ fontSize: '16px' }} aria-hidden="true"></i>
-                          </span>
+                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
                           <span style={{ fontSize: '14px', color: '#4a3f35', fontWeight: 700 }}>העדפות שיבוץ</span>
                         </div>
 
@@ -1770,13 +1768,17 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', alignItems: 'center' }}>
-                  <span style={{ fontSize: '12px', color: '#8a7a6e' }}>העתק מכיתה:</span>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '12px', color: '#8a7a6e' }}>העתק תכנית מכיתה:</span>
                   <select value={copyFromGroup} onChange={e => setCopyFromGroup(e.target.value)} style={{ ...styles.input, width: 'auto', fontSize: '12px', padding: '5px 10px' }}>
                     <option value="">בחר כיתה</option>
                     {groups.filter(g => g.id !== selectedGroup?.id).map(g => <option key={g.id} value={g.id}>{g.group_name}</option>)}
                   </select>
+                  <span style={{ fontSize: '12px', color: '#8a7a6e' }}>אל <strong>{selectedGroup ? selectedGroup.group_name : 'הכיתה שנבחרה'}</strong></span>
                   <button onClick={handleCopyFrom} style={{ ...styles.btnOutline, fontSize: '12px', padding: '5px 12px' }}>העתק</button>
+                </div>
+                <div style={{ fontSize: '11px', color: '#c8baa6', marginBottom: '16px', lineHeight: 1.5 }}>
+                  הפעולה מעתיקה את שעות התכנית מהכיתה שנבחרה בתפריט אל הכיתה הפתוחה כרגע ({selectedGroup ? selectedGroup.group_name : '—'}), ומחליפה את הערכים בטופס. השינויים נשמרים רק לאחר לחיצה על "שמור שינויים".
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '16px' }}>
