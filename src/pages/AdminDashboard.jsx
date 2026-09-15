@@ -92,6 +92,7 @@ export default function AdminDashboard() {
   const [response, setResponse] = useState({ status: 'approved', admin_response: '' });
   const [newWindow, setNewWindow] = useState({ title: '', start_date: '', end_date: '' });
   const [windowErrors, setWindowErrors] = useState({ title: false, start_date: false, end_date: false });
+  const [windowDateError, setWindowDateError] = useState('');
   const [pendingCount, setPendingCount] = useState(0);
   const [confirmModal, setConfirmModal] = useState(null);
   const [editModal, setEditModal] = useState(null);
@@ -633,6 +634,7 @@ export default function AdminDashboard() {
   };
 
   const handleCreateWindow = async () => {
+    setWindowDateError('');
     const errs = {
       title: !newWindow.title.trim(),
       start_date: !newWindow.start_date,
@@ -640,8 +642,8 @@ export default function AdminDashboard() {
     };
     if (errs.title || errs.start_date || errs.end_date) { setWindowErrors(errs); return; }
     if (new Date(newWindow.end_date) <= new Date(newWindow.start_date)) {
-      setWindowErrors({ title: false, start_date: false, end_date: true });
-      alert('תאריך הסגירה חייב להיות אחרי תאריך הפתיחה.');
+      setWindowErrors({ title: false, start_date: false, end_date: false });
+      setWindowDateError('תאריך הסגירה חייב להיות אחרי תאריך הפתיחה.');
       return;
     }
     setWindowErrors({ title: false, start_date: false, end_date: false });
@@ -846,25 +848,12 @@ export default function AdminDashboard() {
                         {!run.is_selected && !run.is_published && <span style={{ ...styles.badge, backgroundColor: '#f0ebe3', color: '#8a7a6e' }}>בארכיון</span>}
                       </div>
                       <div style={{ width: '130px', minWidth: 0 }}>
-                        {editingNoteId === run.id ? (
-                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                            <input
-                              value={noteDraft}
-                              onChange={e => setNoteDraft(e.target.value)}
-                              maxLength={150}
-                              placeholder="הערה…"
-                              style={{ ...styles.input, padding: '6px 10px', fontSize: '13px', flex: 1 }}
-                              autoFocus
-                            />
-                            <button onClick={() => saveNote(run.id)} disabled={savingNote} style={{ backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 10px', fontSize: '12px', cursor: 'pointer' }}>{savingNote ? '…' : 'שמור'}</button>
-                            <button onClick={cancelNoteEdit} disabled={savingNote} style={{ ...styles.btnOutline, padding: '6px 10px', fontSize: '12px' }}>ביטול</button>
-                          </div>
-                        ) : run.admin_note ? (
-                          <button onClick={() => setViewingNote(run)} style={{ ...styles.btnOutline, padding: '4px 10px', fontSize: '12px' }}>
+                        {run.admin_note ? (
+                          <button onClick={() => setViewingNote(run)} style={{ backgroundColor: '#EDF4E8', border: '1px solid #cfe0c2', color: '#4a7c3f', borderRadius: '7px', padding: '5px 12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px', fontFamily: 'Varela Round, sans-serif' }}>
                             <i className="ti ti-note" aria-hidden="true"></i> צפה בהערה
                           </button>
                         ) : (
-                          <button onClick={() => startNoteEdit(run)} style={{ ...styles.btnOutline, padding: '4px 10px', fontSize: '12px' }}>
+                          <button onClick={() => startNoteEdit(run)} style={{ backgroundColor: 'transparent', border: '1px dashed #d8d0c4', color: '#c8baa6', borderRadius: '7px', padding: '5px 12px', fontSize: '12px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px', fontFamily: 'Varela Round, sans-serif' }}>
                             <i className="ti ti-plus" aria-hidden="true"></i> הוסף הערה
                           </button>
                         )}
@@ -997,7 +986,7 @@ export default function AdminDashboard() {
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <input type="date" style={{ ...styles.input, ...styles.dateTimePart, borderColor: windowErrors.start_date ? '#c0705a' : undefined, backgroundColor: windowErrors.start_date ? '#fff8f6' : undefined }}
                       value={(newWindow.start_date || '').split('T')[0] || ''}
-                      onChange={e => { const time = (newWindow.start_date || '').split('T')[1] || '08:00'; setNewWindow({ ...newWindow, start_date: e.target.value ? `${e.target.value}T${time}` : '' }); if (windowErrors.start_date) setWindowErrors(p => ({ ...p, start_date: false })); }} />
+                      onChange={e => { const time = (newWindow.start_date || '').split('T')[1] || '08:00'; setNewWindow({ ...newWindow, start_date: e.target.value ? `${e.target.value}T${time}` : '' }); if (windowErrors.start_date) setWindowErrors(p => ({ ...p, start_date: false })); setWindowDateError(''); }} />
                     <input type="time" style={{ ...styles.input, ...styles.dateTimePart, width: '110px', flex: '0 0 auto', borderColor: windowErrors.start_date ? '#c0705a' : undefined, backgroundColor: windowErrors.start_date ? '#fff8f6' : undefined }}
                       value={(newWindow.start_date || '').split('T')[1] || '08:00'}
                       onChange={e => { const date = (newWindow.start_date || '').split('T')[0]; if (!date) return; setNewWindow({ ...newWindow, start_date: `${date}T${e.target.value}` }); if (windowErrors.start_date) setWindowErrors(p => ({ ...p, start_date: false })); }} />
@@ -1009,12 +998,13 @@ export default function AdminDashboard() {
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <input type="date" style={{ ...styles.input, ...styles.dateTimePart, borderColor: windowErrors.end_date ? '#c0705a' : undefined, backgroundColor: windowErrors.end_date ? '#fff8f6' : undefined }}
                       value={(newWindow.end_date || '').split('T')[0] || ''}
-                      onChange={e => { const time = (newWindow.end_date || '').split('T')[1] || '23:59'; setNewWindow({ ...newWindow, end_date: e.target.value ? `${e.target.value}T${time}` : '' }); if (windowErrors.end_date) setWindowErrors(p => ({ ...p, end_date: false })); }} />
+                      onChange={e => { const time = (newWindow.end_date || '').split('T')[1] || '23:59'; setNewWindow({ ...newWindow, end_date: e.target.value ? `${e.target.value}T${time}` : '' }); if (windowErrors.end_date) setWindowErrors(p => ({ ...p, end_date: false })); setWindowDateError(''); }} />
                     <input type="time" style={{ ...styles.input, ...styles.dateTimePart, width: '110px', flex: '0 0 auto', borderColor: windowErrors.end_date ? '#c0705a' : undefined, backgroundColor: windowErrors.end_date ? '#fff8f6' : undefined }}
                       value={(newWindow.end_date || '').split('T')[1] || '23:59'}
                       onChange={e => { const date = (newWindow.end_date || '').split('T')[0]; if (!date) return; setNewWindow({ ...newWindow, end_date: `${date}T${e.target.value}` }); if (windowErrors.end_date) setWindowErrors(p => ({ ...p, end_date: false })); }} />
                   </div>
                   {windowErrors.end_date && <div style={{ fontSize: '11px', color: '#c0705a', marginTop: '4px' }}>נא לבחור תאריך סגירה</div>}
+                  {windowDateError && <div style={{ fontSize: '12px', color: '#c0705a', marginTop: '8px', padding: '8px 12px', backgroundColor: '#fff3f0', border: '1px solid #f0c9be', borderRadius: '8px' }}>{windowDateError}</div>}
                 </div>
               </div>
               <button onClick={handleCreateWindow} style={styles.btnAdd}>
@@ -1631,7 +1621,7 @@ export default function AdminDashboard() {
                     {GRADES.map(grade => (
                       <div key={grade} style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                         <label style={{ ...styles.label, marginBottom: 0, width: '70px' }}>כיתות {GRADE_LABELS[grade]}</label>
-                        <input type="time" style={{ ...styles.input, width: '120px' }}
+                        <input type="time" style={{ ...styles.input, width: '160px' }}
                           value={(schoolSettings.grade_end_times || {})[String(grade)] || ''}
                           onChange={e => setSchoolSettings(prev => ({
                             ...prev,
@@ -1997,6 +1987,33 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+
+      {editingNoteId !== null && (() => {
+        const noteRun = runs.find(r => r.id === editingNoteId);
+        return (
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={cancelNoteEdit}>
+            <div style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1px solid #e2dacc', padding: '32px', width: '460px', maxWidth: '94vw' }} onClick={e => e.stopPropagation()} dir="rtl">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+                <h3 style={{ fontSize: '16px', color: '#4a3f35', margin: 0 }}>{noteRun && noteRun.admin_note ? 'עריכת הערה' : 'הוספת הערה'}</h3>
+                <button onClick={cancelNoteEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c8baa6', fontSize: '20px' }}>✕</button>
+              </div>
+              <textarea
+                value={noteDraft}
+                onChange={e => setNoteDraft(e.target.value)}
+                maxLength={150}
+                placeholder="כתבו כאן הערה על המערכת…"
+                autoFocus
+                style={{ ...styles.input, width: '100%', minHeight: '110px', resize: 'vertical', fontSize: '14px', lineHeight: 1.6, fontFamily: 'Varela Round, sans-serif' }}
+              />
+              <div style={{ fontSize: '11px', color: '#c8baa6', textAlign: 'left', marginTop: '4px' }}>{noteDraft.length}/150</div>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-start', marginTop: '18px' }}>
+                <button onClick={() => saveNote(editingNoteId)} disabled={savingNote} style={{ backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 20px', fontSize: '14px', cursor: savingNote ? 'default' : 'pointer', opacity: savingNote ? 0.6 : 1, fontFamily: 'Varela Round, sans-serif' }}>{savingNote ? 'שומר…' : 'שמור'}</button>
+                <button onClick={cancelNoteEdit} disabled={savingNote} style={styles.btnOutline}>ביטול</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {showNotifForm && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeNotifForm}>
