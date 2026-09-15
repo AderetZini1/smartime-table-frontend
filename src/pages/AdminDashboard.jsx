@@ -243,7 +243,7 @@ export default function AdminDashboard() {
   const handleAddPedagogical = async () => {
     const t = newPedagogical.constraint_type;
     if (!t) { setPedError('יש לבחור סוג אילוץ'); return; }
-    if (t !== 'min_gap' && !newPedagogical.subject_a_id) { setPedError('יש לבחור מקצוע'); return; }
+    if (!newPedagogical.subject_a_id) { setPedError('יש לבחור מקצוע'); return; }
     if (t === 'not_consecutive') {
       if (!newPedagogical.subject_b_id) { setPedError('יש לבחור מקצוע שני'); return; }
       if (newPedagogical.subject_a_id === newPedagogical.subject_b_id) { setPedError('יש לבחור שני מקצועות שונים'); return; }
@@ -253,15 +253,19 @@ export default function AdminDashboard() {
     }
     setPedError('');
     const data = {
-      constraint_type: newPedagogical.constraint_type,
+      constraint_type: t,
       subject_a_id: newPedagogical.subject_a_id ? parseInt(newPedagogical.subject_a_id) : null,
-      subject_b_id: newPedagogical.subject_b_id ? parseInt(newPedagogical.subject_b_id) : null,
-      numeric_value: newPedagogical.numeric_value ? parseInt(newPedagogical.numeric_value) : null,
+      subject_b_id: newPedagogical.subject_b_id
+        ? parseInt(newPedagogical.subject_b_id)
+        : (t === 'min_gap' ? parseInt(newPedagogical.subject_a_id) : null),
+      numeric_value: t === 'min_gap'
+        ? (parseInt(newPedagogical.numeric_value) || 0)
+        : (newPedagogical.numeric_value ? parseInt(newPedagogical.numeric_value) : null),
       raw_text: newPedagogical.raw_text || null,
     };
     await addPedagogicalConstraint(data);
     getPedagogicalConstraints().then(r => setPedagogical(r.data));
-    setNewPedagogical({ constraint_type: 'max_per_day', subject_a_id: '', subject_b_id: '', numeric_value: '', raw_text: '' });
+    setNewPedagogical({ constraint_type: '', subject_a_id: '', subject_b_id: '', numeric_value: '', raw_text: '' });
   };
 
   const handleDeletePedagogical = async (id) => {
@@ -1668,28 +1672,28 @@ export default function AdminDashboard() {
                       {PEDAGOGICAL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                   </div>
-                  {newPedagogical.constraint_type && newPedagogical.constraint_type !== 'min_gap' && (
+                  {newPedagogical.constraint_type && (
                     <div>
-                      <label style={styles.label}>{newPedagogical.constraint_type === 'not_consecutive' ? 'מקצוע ראשון' : 'מקצוע'}</label>
+                      <label style={styles.label}>{(newPedagogical.constraint_type === 'not_consecutive' || newPedagogical.constraint_type === 'min_gap') ? 'מקצוע ראשון' : 'מקצוע'}</label>
                       <select value={newPedagogical.subject_a_id} onChange={e => setNewPedagogical(p => ({ ...p, subject_a_id: e.target.value }))} style={{ ...styles.input, cursor: 'pointer' }}>
                         <option value="">בחר מקצוע</option>
                         {subjects.map(s => <option key={s.id} value={s.id}>{s.subject_name}</option>)}
                       </select>
                     </div>
                   )}
-                  {newPedagogical.constraint_type === 'not_consecutive' && (
+                  {(newPedagogical.constraint_type === 'not_consecutive' || newPedagogical.constraint_type === 'min_gap') && (
                     <div>
-                      <label style={styles.label}>מקצוע שני</label>
+                      <label style={styles.label}>מקצוע שני{newPedagogical.constraint_type === 'min_gap' ? ' (ריק = אותו מקצוע)' : ''}</label>
                       <select value={newPedagogical.subject_b_id} onChange={e => setNewPedagogical(p => ({ ...p, subject_b_id: e.target.value }))} style={{ ...styles.input, cursor: 'pointer' }}>
                         <option value="">בחר מקצוע</option>
                         {subjects.map(s => <option key={s.id} value={s.id}>{s.subject_name}</option>)}
                       </select>
                     </div>
                   )}
-                  {newPedagogical.constraint_type === 'max_per_day' && (
+                  {(newPedagogical.constraint_type === 'max_per_day' || newPedagogical.constraint_type === 'min_gap') && (
                     <div>
-                      <label style={styles.label}>ערך (מקסימום שיעורים ביום)</label>
-                      <input type="number" min="1" value={newPedagogical.numeric_value} onChange={e => setNewPedagogical(p => ({ ...p, numeric_value: e.target.value }))} style={{ ...styles.input, width: '100px' }} placeholder="למשל: 2" />
+                      <label style={styles.label}>{newPedagogical.constraint_type === 'max_per_day' ? 'ערך (מקסימום שיעורים ביום)' : 'מינימום הפרדה (0 = צמודים)'}</label>
+                      <input type="number" min="0" value={newPedagogical.numeric_value} onChange={e => setNewPedagogical(p => ({ ...p, numeric_value: e.target.value }))} style={{ ...styles.input, width: '100px' }} placeholder={newPedagogical.constraint_type === 'max_per_day' ? 'למשל: 2' : '0'} />
                     </div>
                   )}
                   {pedError && <div style={{ color: '#c0392b', fontSize: '13px' }}>{pedError}</div>}
@@ -1700,22 +1704,24 @@ export default function AdminDashboard() {
                 ) : pedagogical.map((p, i) => (
                   editingPedId === p.id ? (
                     <div key={p.id} style={{ padding: '14px 0', borderBottom: i < pedagogical.length - 1 ? '1px solid #f0ebe3' : 'none', display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '340px' }}>
-                      <select value={editPedDraft.constraint_type} onChange={e => setEditPedDraft(d => ({ ...d, constraint_type: e.target.value, subject_a_id: '', subject_b_id: '' }))} style={{ ...styles.input, cursor: 'pointer' }}>
+                      <select value={editPedDraft.constraint_type} onChange={e => setEditPedDraft(d => ({ ...d, constraint_type: e.target.value, subject_a_id: '', subject_b_id: '', numeric_value: '' }))} style={{ ...styles.input, cursor: 'pointer' }}>
                         {PEDAGOGICAL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                       </select>
-                      {editPedDraft.constraint_type !== 'min_gap' && (
+                      {editPedDraft.constraint_type && (
                         <select value={editPedDraft.subject_a_id} onChange={e => setEditPedDraft(d => ({ ...d, subject_a_id: e.target.value }))} style={{ ...styles.input, cursor: 'pointer' }}>
-                          <option value="">{editPedDraft.constraint_type === 'not_consecutive' ? 'מקצוע ראשון' : 'בחר מקצוע'}</option>
+                          <option value="">{(editPedDraft.constraint_type === 'not_consecutive' || editPedDraft.constraint_type === 'min_gap') ? 'מקצוע ראשון' : 'בחר מקצוע'}</option>
                           {subjects.map(s => <option key={s.id} value={s.id}>{s.subject_name}</option>)}
                         </select>
                       )}
-                      {editPedDraft.constraint_type === 'not_consecutive' && (
+                      {(editPedDraft.constraint_type === 'not_consecutive' || editPedDraft.constraint_type === 'min_gap') && (
                         <select value={editPedDraft.subject_b_id} onChange={e => setEditPedDraft(d => ({ ...d, subject_b_id: e.target.value }))} style={{ ...styles.input, cursor: 'pointer' }}>
-                          <option value="">מקצוע שני</option>
+                          <option value="">{editPedDraft.constraint_type === 'min_gap' ? 'מקצוע שני (ריק = אותו מקצוע)' : 'מקצוע שני'}</option>
                           {subjects.map(s => <option key={s.id} value={s.id}>{s.subject_name}</option>)}
                         </select>
                       )}
-                      <input type="number" value={editPedDraft.numeric_value} onChange={e => setEditPedDraft(d => ({ ...d, numeric_value: e.target.value }))} style={{ ...styles.input, width: '100px' }} placeholder="ערך" />
+                      {(editPedDraft.constraint_type === 'max_per_day' || editPedDraft.constraint_type === 'min_gap') && (
+                        <input type="number" min="0" value={editPedDraft.numeric_value} onChange={e => setEditPedDraft(d => ({ ...d, numeric_value: e.target.value }))} style={{ ...styles.input, width: '100px' }} placeholder={editPedDraft.constraint_type === 'max_per_day' ? 'מקסימום' : '0'} />
+                      )}
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <button onClick={saveEditPed} disabled={savingPed} style={{ backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 16px', fontSize: '13px', cursor: savingPed ? 'default' : 'pointer', opacity: savingPed ? 0.6 : 1 }}>{savingPed ? 'שומר…' : 'שמור'}</button>
                         <button onClick={cancelEditPed} disabled={savingPed} style={{ ...styles.btnOutline, padding: '7px 16px', fontSize: '13px' }}>ביטול</button>
