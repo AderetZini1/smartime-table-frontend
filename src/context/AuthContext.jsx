@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { getMe } from '../services/api';
+import { getMe, resetSessionExpiredFlag } from '../services/api';
 
 const AuthContext = createContext();
 
@@ -34,6 +34,7 @@ export const AuthProvider = ({ children }) => {
 
   const loginUser = (token, userData) => {
     localStorage.setItem('token', token);
+    resetSessionExpiredFlag();
     setSessionExpired(false);
     setUser(userData);
   };
