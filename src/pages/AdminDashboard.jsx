@@ -132,7 +132,8 @@ export default function AdminDashboard() {
   const [pedagogical, setPedagogical] = useState([]);
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [newBreak, setNewBreak] = useState({ after_lesson: 2, duration_minutes: 10 });
-  const [newPedagogical, setNewPedagogical] = useState({ constraint_type: 'max_per_day', subject_a_id: '', subject_b_id: '', numeric_value: '', raw_text: '' });
+  const [newPedagogical, setNewPedagogical] = useState({ constraint_type: '', subject_a_id: '', subject_b_id: '', numeric_value: '', raw_text: '' });
+  const [pedError, setPedError] = useState('');
   const [editingPedId, setEditingPedId] = useState(null);
   const [editPedDraft, setEditPedDraft] = useState(null);
   const [savingPed, setSavingPed] = useState(false);
@@ -240,7 +241,17 @@ export default function AdminDashboard() {
   };
 
   const handleAddPedagogical = async () => {
-    if (!newPedagogical.constraint_type) return;
+    const t = newPedagogical.constraint_type;
+    if (!t) { setPedError('יש לבחור סוג אילוץ'); return; }
+    if (t !== 'min_gap' && !newPedagogical.subject_a_id) { setPedError('יש לבחור מקצוע'); return; }
+    if (t === 'not_consecutive') {
+      if (!newPedagogical.subject_b_id) { setPedError('יש לבחור מקצוע שני'); return; }
+      if (newPedagogical.subject_a_id === newPedagogical.subject_b_id) { setPedError('יש לבחור שני מקצועות שונים'); return; }
+    }
+    if (t === 'max_per_day' && (!parseInt(newPedagogical.numeric_value) || parseInt(newPedagogical.numeric_value) < 1)) {
+      setPedError('יש להזין ערך מספרי (1 ומעלה)'); return;
+    }
+    setPedError('');
     const data = {
       constraint_type: newPedagogical.constraint_type,
       subject_a_id: newPedagogical.subject_a_id ? parseInt(newPedagogical.subject_a_id) : null,
@@ -1652,11 +1663,12 @@ export default function AdminDashboard() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px', maxWidth: '340px' }}>
                   <div>
                     <label style={styles.label}>סוג אילוץ</label>
-                    <select value={newPedagogical.constraint_type} onChange={e => setNewPedagogical(p => ({ ...p, constraint_type: e.target.value, subject_a_id: '', subject_b_id: '' }))} style={{ ...styles.input, cursor: 'pointer' }}>
+                    <select value={newPedagogical.constraint_type} onChange={e => { setPedError(''); setNewPedagogical(p => ({ ...p, constraint_type: e.target.value, subject_a_id: '', subject_b_id: '', numeric_value: '' })); }} style={{ ...styles.input, cursor: 'pointer' }}>
+                      <option value="">בחר אילוץ להחיל על המערכת</option>
                       {PEDAGOGICAL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                   </div>
-                  {newPedagogical.constraint_type !== 'min_gap' && (
+                  {newPedagogical.constraint_type && newPedagogical.constraint_type !== 'min_gap' && (
                     <div>
                       <label style={styles.label}>{newPedagogical.constraint_type === 'not_consecutive' ? 'מקצוע ראשון' : 'מקצוע'}</label>
                       <select value={newPedagogical.subject_a_id} onChange={e => setNewPedagogical(p => ({ ...p, subject_a_id: e.target.value }))} style={{ ...styles.input, cursor: 'pointer' }}>
@@ -1674,10 +1686,13 @@ export default function AdminDashboard() {
                       </select>
                     </div>
                   )}
-                  <div>
-                    <label style={styles.label}>ערך</label>
-                    <input type="number" value={newPedagogical.numeric_value} onChange={e => setNewPedagogical(p => ({ ...p, numeric_value: e.target.value }))} style={{ ...styles.input, width: '100px' }} placeholder="למשל: 2" />
-                  </div>
+                  {newPedagogical.constraint_type === 'max_per_day' && (
+                    <div>
+                      <label style={styles.label}>ערך (מקסימום שיעורים ביום)</label>
+                      <input type="number" min="1" value={newPedagogical.numeric_value} onChange={e => setNewPedagogical(p => ({ ...p, numeric_value: e.target.value }))} style={{ ...styles.input, width: '100px' }} placeholder="למשל: 2" />
+                    </div>
+                  )}
+                  {pedError && <div style={{ color: '#c0392b', fontSize: '13px' }}>{pedError}</div>}
                   <button onClick={handleAddPedagogical} style={styles.btnAdd}>+ הוסף</button>
                 </div>
                 {pedagogical.length === 0 ? (
