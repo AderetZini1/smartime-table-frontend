@@ -19,21 +19,31 @@ api.interceptors.request.use((config) => {
 
 // Fire a one-time "session expired" event on 401 — but only if we HAD a token
 // (so a normal failed login, where no token is stored yet, doesn't trigger it).
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error?.response?.status === 401 && localStorage.getItem('token')) {
+// Shared 401 handler for BOTH backends. A module-level flag makes it
+// idempotent: the FIRST 401 fires the session-expired event once; every
+// concurrent 401 after it is swallowed too (a never-settling promise), so
+// no raw 401 leaks to React's error overlay. Reset on a fresh login.
+let sessionExpiredFired = false;
+
+export const resetSessionExpiredFlag = () => { sessionExpiredFired = false; };
+
+const handle401 = (error) => {
+  const status = error?.response?.status;
+  const hadToken = localStorage.getItem('token');
+  if (status === 401 && (hadToken || sessionExpiredFired)) {
+    if (!sessionExpiredFired) {
+      sessionExpiredFired = true;
       localStorage.removeItem('token');
       localStorage.removeItem('token8001');
       window.dispatchEvent(new Event('session-expired'));
-      // Swallow the error: the session-expired modal handles it. Returning a
-      // never-settling promise stops this request quietly, so React's error
-      // overlay doesn't show a raw 401.
-      return new Promise(() => { });
     }
-    return Promise.reject(error);
+    // Swallow quietly so the modal handles re-login, no red 401 overlay.
+    return new Promise(() => { });
   }
-);
+  return Promise.reject(error);
+};
+
+api.interceptors.response.use((response) => response, handle401);
 
 // Auth
 export const login = (username, password) => {
@@ -133,19 +143,7 @@ api2.interceptors.request.use((config) => {
   return config;
 });
 
-api2.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error?.response?.status === 401 && localStorage.getItem('token')) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('token8001');
-      window.dispatchEvent(new Event('session-expired'));
-      // Swallow: session-expired modal handles it; don't propagate to React's overlay.
-      return new Promise(() => { });
-    }
-    return Promise.reject(error);
-  }
-);
+api2.interceptors.response.use((response) => response, handle401);
 
 // Silent login to 8001 (same ID + password as 8000). Stores its token.
 export const login8001 = (username, password) =>
