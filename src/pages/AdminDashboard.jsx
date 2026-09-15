@@ -292,14 +292,29 @@ export default function AdminDashboard() {
   // implemented as delete-old + create-new using the two calls that already work.
   const saveEditPed = async () => {
     if (!editPedDraft) return;
+    const t = editPedDraft.constraint_type;
+    if (!t) { setPedError('יש לבחור סוג אילוץ'); return; }
+    if (!editPedDraft.subject_a_id) { setPedError('יש לבחור מקצוע'); return; }
+    if (t === 'not_consecutive') {
+      if (!editPedDraft.subject_b_id) { setPedError('יש לבחור מקצוע שני'); return; }
+      if (editPedDraft.subject_a_id === editPedDraft.subject_b_id) { setPedError('יש לבחור שני מקצועות שונים'); return; }
+    }
+    if (t === 'max_per_day' && (!parseInt(editPedDraft.numeric_value) || parseInt(editPedDraft.numeric_value) < 1)) {
+      setPedError('יש להזין ערך מספרי (1 ומעלה)'); return;
+    }
+    setPedError('');
     setSavingPed(true);
     try {
       await deletePedagogicalConstraint(editingPedId);
       await addPedagogicalConstraint({
-        constraint_type: editPedDraft.constraint_type,
+        constraint_type: t,
         subject_a_id: editPedDraft.subject_a_id ? parseInt(editPedDraft.subject_a_id) : null,
-        subject_b_id: editPedDraft.subject_b_id ? parseInt(editPedDraft.subject_b_id) : null,
-        numeric_value: editPedDraft.numeric_value ? parseInt(editPedDraft.numeric_value) : null,
+        subject_b_id: editPedDraft.subject_b_id
+          ? parseInt(editPedDraft.subject_b_id)
+          : (t === 'min_gap' ? parseInt(editPedDraft.subject_a_id) : null),
+        numeric_value: t === 'min_gap'
+          ? (parseInt(editPedDraft.numeric_value) || 0)
+          : (editPedDraft.numeric_value ? parseInt(editPedDraft.numeric_value) : null),
         raw_text: null,
       });
       const res = await getPedagogicalConstraints();
