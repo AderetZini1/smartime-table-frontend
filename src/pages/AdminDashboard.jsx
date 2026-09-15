@@ -1330,10 +1330,7 @@ export default function AdminDashboard() {
 
                       {/* Availability constraints */}
                       <div style={{ backgroundColor: '#FAF7F2', borderRadius: '10px', padding: '16px 18px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px', gap: '10px' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', borderRadius: '8px', backgroundColor: '#FFF3D6', color: '#a08c30' }}>
-                            <i className="ti ti-calendar-time" style={{ fontSize: '16px' }} aria-hidden="true"></i>
-                          </span>
+                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px'}}>
                           <span style={{ fontSize: '14px', color: '#4a3f35', fontWeight: 700 }}>אילוצי זמינות</span>
                         </div>
                         <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', fontSize: '12px', color: '#8a7a6e' }}>
