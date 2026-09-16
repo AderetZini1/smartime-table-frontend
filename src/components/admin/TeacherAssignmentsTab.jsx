@@ -144,19 +144,19 @@ export default function TeacherAssignmentsTab({ title }) {
             const over = teacher && isOverQuota(teacher.id);
             return (
               <div key={c.id} onClick={() => openPicker(c)}
-                style={{ display: 'grid', gridTemplateColumns: '160px 60px 220px', justifyContent: 'center', alignItems: 'center', gap: '28px', padding: '11px 12px', borderBottom: '1px solid #f0ebe3', cursor: 'pointer', borderRadius: '8px' }}
+                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', alignItems: 'center', gap: '12px', padding: '11px 12px', borderBottom: '1px solid #f0ebe3', cursor: 'pointer', borderRadius: '8px' }}
                 onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FAF7F2'}
                 onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
-                <div style={{ fontSize: '14px', color: '#4a3f35' }}>{subjectName(c.subject_id)}</div>
+                <div style={{ fontSize: '14px', color: '#4a3f35', textAlign: 'center' }}>{subjectName(c.subject_id)}</div>
                 <div style={{ fontSize: '12px', color: '#8a7a6e', textAlign: 'center' }}>{c.weekly_hours} ש'</div>
                 {teacher ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                     <span style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: colorForTeacher(teacher.id).bg, color: colorForTeacher(teacher.id).color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600, flexShrink: 0 }}>{initials(teacher)}</span>
                     <span style={{ fontSize: '13px', color: '#4a3f35' }}>{fullName(teacher)}</span>
                     {over && <span title="משובץ מעבר למכסה" style={{ color: '#c0705a', fontSize: '14px' }}>⚠</span>}
                   </div>
                 ) : (
-                  <div style={{ fontSize: '13px', color: '#c0705a' }}>לא משויך — לחצ/י לשיוך</div>
+                  <div style={{ fontSize: '13px', color: '#c0705a', textAlign: 'center' }}>לא משויך — לחצ/י לשיוך</div>
                 )}
               </div>
             );
