@@ -20,6 +20,13 @@ const DAY_ORDER = [1, 2, 3, 4, 5, 6];
 const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
 const DIM_LABEL = { class: 'כיתה', teacher: 'מורה', subject: 'מקצוע', grade: 'שכבה' };
 const ALGO_LABELS = { CSP: 'CSP', HILL_CLIMBING: 'טיפוס גבעות', GENETIC: 'גנטי', GENETIC_MEMETIC: 'גנטי משופר' };
+const VIOLATION_TYPE_LABELS = {
+    ped_max_per_day: 'מעל המקסימום ליום',
+    ped_not_last: 'שיבוץ בשעה אחרונה',
+    ped_morning_only: 'לא בשעות הבוקר',
+    ped_not_consecutive: 'שיעורים צמודים (למרות בקשה לא)',
+    ped_min_gap: 'רווח מינימלי בין שיעורים',
+};
 
 const extractGrade = (groupName) => {
     const match = groupName.match(/כיתה\s*([א-ת])/);
@@ -94,6 +101,8 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
     const [violationsSummary, setViolationsSummary] = useState(null);
     const [violations, setViolations] = useState(null);
     const [showViolations, setShowViolations] = useState(false);
+    const [violationSearch, setViolationSearch] = useState('');
+    const [openViolationGroups, setOpenViolationGroups] = useState({});
     const [filterType, setFilterType] = useState(null);
     const [selectedValues, setSelectedValues] = useState([]);
     const [comboOpen, setComboOpen] = useState(false);
@@ -712,22 +721,68 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                                 <i className="ti ti-circle-check" style={{ fontSize: '32px', display: 'block', marginBottom: '10px' }} aria-hidden="true"></i>
                                 לא נמצאו הפרות — מערכת מושלמת!
                             </div>
-                        ) : (
-                            <>
-                                <div style={{ fontSize: '13px', color: '#8a7a6e', marginBottom: '14px' }}>
-                                    סה״כ {violations.length} הפרות · קשיחות: {violations.filter(v => v.severity === 'hard').length} · רכות: {violations.filter(v => v.severity === 'soft').length}
-                                </div>
-                                {violations.map((v, i) => (
-                                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: i < violations.length - 1 ? '1px solid #f0ebe3' : 'none' }}>
-                                        <span style={{ flexShrink: 0, fontSize: '11px', padding: '3px 10px', borderRadius: '20px', backgroundColor: v.severity === 'hard' ? '#FAE8E8' : '#FFF3A3', color: v.severity === 'hard' ? '#c0705a' : '#a08c30' }}>
-                                            {v.severity === 'hard' ? 'קשיחה' : 'רכה'}
-                                        </span>
-                                        <span style={{ flex: 1, fontSize: '13px', color: '#4a3f35' }}>{v.detail}</span>
-                                        <span style={{ flexShrink: 0, fontSize: '13px', color: '#8a7a6e', fontWeight: 600 }}>+{v.penalty.toLocaleString()}</span>
+                        ) : (() => {
+                            const q = violationSearch.trim();
+                            const filtered = q ? violations.filter(v => (v.detail || '').includes(q)) : violations;
+                            const groups = {};
+                            filtered.forEach(v => { (groups[v.type] = groups[v.type] || []).push(v); });
+                            const groupKeys = Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length);
+                            return (
+                                <>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                                        <input
+                                            value={violationSearch}
+                                            onChange={e => setViolationSearch(e.target.value)}
+                                            placeholder="חיפוש בפרטי ההפרה (כיתה, מקצוע, מורה…)"
+                                            style={{ flex: 1, minWidth: '200px', padding: '8px 12px', fontSize: '13px', border: '1px solid #e2dacc', borderRadius: '8px', fontFamily: 'Varela Round, sans-serif', color: '#4a3f35' }}
+                                        />
+                                        {violationSearch && (
+                                            <button onClick={() => setViolationSearch('')} style={{ padding: '8px 14px', fontSize: '13px', border: '1px solid #e2dacc', borderRadius: '8px', background: '#f5f2ee', color: '#8a7a6e', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                                <i className="ti ti-filter-off" aria-hidden="true"></i> נקה סינון
+                                            </button>
+                                        )}
                                     </div>
-                                ))}
-                            </>
-                        )}
+                                    <div style={{ fontSize: '13px', color: '#8a7a6e', marginBottom: '14px' }}>
+                                        {q ? `${filtered.length} מתוך ${violations.length} הפרות` : `סה״כ ${violations.length} הפרות`} · קשיחות: {filtered.filter(v => v.severity === 'hard').length} · רכות: {filtered.filter(v => v.severity === 'soft').length}
+                                    </div>
+                                    {filtered.length === 0 ? (
+                                        <div style={{ textAlign: 'center', color: '#c8baa6', padding: '20px', fontSize: '13px' }}>אין הפרות שתואמות את החיפוש.</div>
+                                    ) : groupKeys.map(type => {
+                                        const rows = groups[type];
+                                        const isOpen = !!openViolationGroups[type];
+                                        const totalPenalty = rows.reduce((s, v) => s + (v.penalty || 0), 0);
+                                        const anyHard = rows.some(v => v.severity === 'hard');
+                                        return (
+                                            <div key={type} style={{ border: '1px solid #ece7dd', borderRadius: '10px', marginBottom: '10px', overflow: 'hidden' }}>
+                                                <button
+                                                    onClick={() => setOpenViolationGroups(p => ({ ...p, [type]: !p[type] }))}
+                                                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', background: '#FAF7F2', border: 'none', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif', textAlign: 'right' }}
+                                                >
+                                                    <i className={`ti ${isOpen ? 'ti-chevron-down' : 'ti-chevron-left'}`} style={{ color: '#8a7a6e' }} aria-hidden="true"></i>
+                                                    <span style={{ flexShrink: 0, width: '9px', height: '9px', borderRadius: '50%', backgroundColor: anyHard ? '#c0705a' : '#d8bb3a' }}></span>
+                                                    <span style={{ flex: 1, fontSize: '14px', color: '#4a3f35', fontWeight: 700 }}>{VIOLATION_TYPE_LABELS[type] || type}</span>
+                                                    <span style={{ flexShrink: 0, fontSize: '12px', color: '#8a7a6e', backgroundColor: '#ece7dd', borderRadius: '10px', padding: '2px 9px' }}>{rows.length}</span>
+                                                    <span style={{ flexShrink: 0, fontSize: '12px', color: '#8a7a6e', fontWeight: 600, minWidth: '54px', textAlign: 'left' }}>+{totalPenalty.toLocaleString()}</span>
+                                                </button>
+                                                {isOpen && (
+                                                    <div style={{ padding: '4px 14px 8px' }}>
+                                                        {rows.map((v, i) => (
+                                                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '9px 0', borderBottom: i < rows.length - 1 ? '1px solid #f0ebe3' : 'none' }}>
+                                                                <span style={{ flexShrink: 0, fontSize: '11px', padding: '3px 10px', borderRadius: '20px', backgroundColor: v.severity === 'hard' ? '#FAE8E8' : '#FFF3A3', color: v.severity === 'hard' ? '#c0705a' : '#a08c30' }}>
+                                                                    {v.severity === 'hard' ? 'קשיחה' : 'רכה'}
+                                                                </span>
+                                                                <span style={{ flex: 1, fontSize: '13px', color: '#4a3f35' }}>{v.detail}</span>
+                                                                <span style={{ flexShrink: 0, fontSize: '13px', color: '#8a7a6e', fontWeight: 600 }}>+{v.penalty.toLocaleString()}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </>
+                            );
+                        })()}
                     </div>
                 </div>
             )}
