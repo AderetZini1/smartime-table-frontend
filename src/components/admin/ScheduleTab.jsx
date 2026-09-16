@@ -117,6 +117,23 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
     const [entries, setEntries] = useState([]);
     const [runInfo, setRunInfo] = useState(null);
     const [generating, setGenerating] = useState(false);
+    
+    // Resume tracking a run that is still in progress after leaving/returning to the tab
+    useEffect(() => {
+        const savedJob = localStorage.getItem('activeGenJob');
+        if (!savedJob) return;
+        setGenerating(true);
+        const poll = async () => {
+            try {
+                const s = await getGenerationStatus(savedJob);
+                if (s.data.status === 'completed') { setGenerating(false); localStorage.removeItem('activeGenJob'); await loadSchedule(); }
+                else if (s.data.status === 'failed') { setGenerating(false); localStorage.removeItem('activeGenJob'); setGenError('יצירת המערכת נכשלה. נסי שוב.'); }
+                else setTimeout(poll, 3000);
+            } catch (e) { setGenerating(false); localStorage.removeItem('activeGenJob'); }
+        };
+        setTimeout(poll, 1500);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     const [publishing, setPublishing] = useState(false);
     const [genError, setGenError] = useState('');
     const [publishMsg, setPublishMsg] = useState('');
@@ -185,14 +202,15 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
         try {
             const start = await runGeneration();
             const jobId = start.data.job_id;
+            localStorage.setItem('activeGenJob', jobId);
             const poll = async () => {
                 try {
                     const s = await getGenerationStatus(jobId);
-                    if (s.data.status === 'completed') { setGenerating(false); await loadSchedule(); }
-                    else if (s.data.status === 'failed') { setGenerating(false); setGenError('יצירת המערכת נכשלה. נסי שוב.'); }
+                    if (s.data.status === 'completed') { setGenerating(false); localStorage.removeItem('activeGenJob'); await loadSchedule(); }
+                    else if (s.data.status === 'failed') { setGenerating(false); localStorage.removeItem('activeGenJob'); setGenError('יצירת המערכת נכשלה. נסי שוב.'); }
                     else setTimeout(poll, 3000);
                 } catch (e) {
-                    setGenerating(false);
+                    setGenerating(false); localStorage.removeItem('activeGenJob');
                     setGenError('שגיאה בבדיקת מצב היצירה');
                 }
             };
@@ -422,9 +440,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                                     <span style={{ marginRight: 'auto', fontSize: '11px', backgroundColor: '#FAE8E8', color: '#c0705a', borderRadius: '10px', padding: '1px 8px' }}>{violationsSummary.hard + violationsSummary.soft}</span>
                                 )}
                             </button>
-                            <button onClick={() => requestGenerate('new')} disabled={generating} style={menuItemStyle(false)}>
-                                <i className="ti ti-wand" aria-hidden="true"></i> צור מערכת חדשה
-                            </button>
+
                         </div>
                     </>
                 )}
