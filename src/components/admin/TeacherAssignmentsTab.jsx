@@ -144,21 +144,20 @@ export default function TeacherAssignmentsTab({ title }) {
             const over = teacher && isOverQuota(teacher.id);
             return (
               <div key={c.id} onClick={() => openPicker(c)}
-                style={{ display: 'flex', alignItems: 'center', padding: '10px 8px', borderBottom: '1px solid #f0ebe3', gap: '12px', cursor: 'pointer', borderRadius: '8px' }}
+                style={{ display: 'grid', gridTemplateColumns: '210px 70px 1fr', alignItems: 'center', gap: '16px', padding: '11px 12px', borderBottom: '1px solid #f0ebe3', cursor: 'pointer', borderRadius: '8px' }}
                 onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FAF7F2'}
                 onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
-                <div style={{ flex: 1, fontSize: '14px', color: '#4a3f35' }}>{subjectName(c.subject_id)}</div>
-                <span style={{ fontSize: '12px', color: '#8a7a6e', minWidth: '54px', textAlign: 'center' }}>{c.weekly_hours} ש'</span>
+                <div style={{ fontSize: '14px', color: '#4a3f35' }}>{subjectName(c.subject_id)}</div>
+                <div style={{ fontSize: '12px', color: '#8a7a6e', textAlign: 'center' }}>{c.weekly_hours} ש'</div>
                 {teacher ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '190px' }}>
-                    <span style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: colorForTeacher(teacher.id).bg, color: colorForTeacher(teacher.id).color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600 }}>{initials(teacher)}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: colorForTeacher(teacher.id).bg, color: colorForTeacher(teacher.id).color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600, flexShrink: 0 }}>{initials(teacher)}</span>
                     <span style={{ fontSize: '13px', color: '#4a3f35' }}>{fullName(teacher)}</span>
                     {over && <span title="משובץ מעבר למכסה" style={{ color: '#c0705a', fontSize: '14px' }}>⚠</span>}
                   </div>
                 ) : (
-                  <div style={{ minWidth: '190px', fontSize: '13px', color: '#c0705a' }}>לא משויך — לחצ/י לשיוך</div>
+                  <div style={{ fontSize: '13px', color: '#c0705a' }}>לא משויך — לחצ/י לשיוך</div>
                 )}
-                <i className="ti ti-pencil" style={{ color: '#c8baa6', fontSize: '16px' }} aria-hidden="true"></i>
               </div>
             );
           })}
