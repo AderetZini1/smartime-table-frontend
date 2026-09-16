@@ -384,7 +384,7 @@ const hoursMap = (rows) => Object.fromEntries(rows.map(c => [c.subject_id, c.wee
 function CurriculumSection() {
   const [subjects, setSubjects] = useState([]);
   const [groups, setGroups] = useState([]);
-  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [selectedGroup, setSelectedGroup] = useState(null); // null = "בחר כיתה"
   const [curriculum, setCurriculum] = useState([]);
   const [hours, setHours] = useState({});
   const [copyFrom, setCopyFrom] = useState('');
@@ -394,10 +394,7 @@ function CurriculumSection() {
 
   useEffect(() => {
     getSubjects().then(r => setSubjects(r.data)).catch(() => { });
-    getStudentGroups().then(r => {
-      setGroups(r.data);
-      if (r.data.length > 0) setSelectedGroup(r.data[0]);
-    }).catch(() => { });
+    getStudentGroups().then(r => setGroups(r.data)).catch(() => { });
   }, []);
 
   const loadCurriculum = (groupId) =>
@@ -409,6 +406,7 @@ function CurriculumSection() {
   useEffect(() => {
     setSaveError('');
     if (selectedGroup) loadCurriculum(selectedGroup.id);
+    else { setCurriculum([]); setHours({}); }
   }, [selectedGroup]);
 
   useEffect(() => {
@@ -449,83 +447,73 @@ function CurriculumSection() {
 
   const total = Object.values(hours).reduce((a, b) => a + (parseInt(b) || 0), 0);
   const selectedName = selectedGroup ? selectedGroup.group_name : null;
+  const selectStyle = { fontFamily: FONT, fontSize: '13px', color: '#4a3f35', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2dacc', backgroundColor: '#fff', minWidth: '180px', cursor: 'pointer' };
 
   return (
-    <div style={styles.card}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <div style={{ fontSize: '15px', color: '#4a3f35' }}>תכנית לימודים שבועית</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {saved && <span style={{ fontSize: '13px', color: '#8a9e78' }}>✓ נשמר</span>}
-          <button onClick={save} disabled={saving} style={{ ...styles.btnAdd, opacity: saving ? 0.6 : 1 }}>{saving ? 'שומר…' : 'שמור שינויים'}</button>
+    <div style={{ maxWidth: '640px', margin: '0 auto' }}>
+      <div style={styles.card}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div style={{ fontSize: '15px', color: '#4a3f35' }}>תכנית לימודים שבועית</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {saved && <span style={{ fontSize: '13px', color: '#8a9e78' }}>✓ נשמר</span>}
+            <button onClick={save} disabled={saving || !selectedGroup} style={{ ...styles.btnAdd, opacity: (saving || !selectedGroup) ? 0.6 : 1 }}>{saving ? 'שומר…' : 'שמור שינויים'}</button>
+          </div>
         </div>
-      </div>
-      {saveError && (
-        <div style={{ fontSize: '13px', color: '#c0705a', backgroundColor: '#fff3f0', border: '1px solid #f0c9be', borderRadius: '8px', padding: '8px 12px', marginBottom: '14px' }}>{saveError}</div>
-      )}
+        {saveError && (
+          <div style={{ fontSize: '13px', color: '#c0705a', backgroundColor: '#fff3f0', border: '1px solid #f0c9be', borderRadius: '8px', padding: '8px 12px', marginBottom: '14px' }}>{saveError}</div>
+        )}
 
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '12px', color: '#8a7a6e' }}>העתק תכנית מכיתה:</span>
-        <select value={copyFrom} onChange={e => setCopyFrom(e.target.value)} style={{ ...styles.input, width: 'auto', fontSize: '12px', padding: '5px 10px' }}>
-          <option value="">בחר כיתה</option>
-          {groups.filter(g => g.id !== selectedGroup?.id).map(g => <option key={g.id} value={g.id}>{g.group_name}</option>)}
-        </select>
-        <span style={{ fontSize: '12px', color: '#8a7a6e' }}>אל <strong>{selectedName || 'הכיתה שנבחרה'}</strong></span>
-        <button onClick={copy} style={{ ...styles.btnOutline, fontSize: '12px', padding: '5px 12px' }}>העתק</button>
-      </div>
-      <div style={{ fontSize: '11px', color: '#c8baa6', marginBottom: '16px', lineHeight: 1.5 }}>
-        הפעולה מעתיקה את שעות התכנית מהכיתה שנבחרה בתפריט אל הכיתה הפתוחה כרגע ({selectedName || '—'}), ומחליפה את הערכים בטופס. השינויים נשמרים רק לאחר לחיצה על "שמור שינויים".
-      </div>
+        {/* class selection */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+          <span style={{ fontSize: '13px', color: '#8a7a6e' }}>כיתה:</span>
+          <select value={selectedGroup?.id ?? ''} onChange={e => setSelectedGroup(groups.find(x => x.id === Number(e.target.value)) || null)} style={selectStyle}>
+            <option value="">בחר כיתה</option>
+            {Object.entries(groupsByGrade(groups)).map(([grade, gs]) => (
+              <optgroup key={grade} label={`שכבה ${grade}`}>
+                {gs.map(g => <option key={g.id} value={g.id}>{g.group_name}</option>)}
+              </optgroup>
+            ))}
+          </select>
+          {selectedGroup && <span style={{ marginRight: 'auto', backgroundColor: '#EDF4E8', color: '#3d6b2e', borderRadius: '20px', padding: '4px 12px', fontSize: '12px' }}>סה"כ {total} שעות</span>}
+        </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '16px' }}>
-        <div style={{ backgroundColor: '#FAF7F2', borderRadius: '10px', border: '1px solid #e2dacc', padding: '10px', maxHeight: '500px', overflowY: 'auto' }}>
-          {Object.entries(groupsByGrade(groups)).map(([grade, gradeGroups]) => (
-            <div key={grade} style={{ marginBottom: '8px' }}>
-              <div style={{ fontSize: '11px', color: '#c8baa6', padding: '4px 6px', marginBottom: '2px' }}>שכבת {grade}</div>
-              {gradeGroups.map(g => {
-                const active = selectedGroup?.id === g.id;
-                return (
-                  <button
-                    key={g.id}
-                    onClick={() => setSelectedGroup(g)}
-                    style={{ display: 'block', width: '100%', textAlign: 'right', padding: '7px 10px', borderRadius: '7px', border: 'none', background: active ? '#EDF4E8' : 'transparent', fontSize: '13px', color: active ? '#3d6b2e' : '#8a7a6e', cursor: 'pointer', marginBottom: '2px', fontFamily: FONT, fontWeight: active ? '500' : 'normal' }}
-                  >
-                    {g.group_name}
-                  </button>
-                );
-              })}
+        {/* copy-from — visually separate box */}
+        {selectedGroup && (
+          <div style={{ backgroundColor: '#FAF7F2', border: '1px solid #e2dacc', borderRadius: '8px', padding: '10px 12px', marginBottom: '18px' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '12px', color: '#8a7a6e' }}>העתקת תכנית מכיתה אחרת:</span>
+              <select value={copyFrom} onChange={e => setCopyFrom(e.target.value)} style={{ ...selectStyle, minWidth: '150px', fontSize: '12px', padding: '5px 10px' }}>
+                <option value="">בחר כיתת מקור</option>
+                {groups.filter(g => g.id !== selectedGroup?.id).map(g => <option key={g.id} value={g.id}>{g.group_name}</option>)}
+              </select>
+              <button onClick={copy} disabled={!copyFrom} style={{ ...styles.btnOutline, fontSize: '12px', padding: '5px 12px', opacity: copyFrom ? 1 : 0.5 }}>העתק</button>
             </div>
-          ))}
-        </div>
+            <div style={{ fontSize: '11px', color: '#c8baa6', marginTop: '6px', lineHeight: 1.5 }}>
+              מעתיק את שעות התכנית מכיתת המקור אל {selectedName ? `כיתה ${selectedName}` : 'הכיתה הנבחרת'}, ומחליף את הערכים בטופס. נשמר רק בלחיצה על "שמור שינויים".
+            </div>
+          </div>
+        )}
 
-        <div>
-          {selectedGroup ? (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                <span style={{ fontSize: '14px', fontWeight: '500', color: '#4a3f35' }}>כיתה {selectedGroup.group_name}</span>
-                <span style={{ backgroundColor: '#EDF4E8', color: '#3d6b2e', borderRadius: '20px', padding: '4px 12px', fontSize: '12px' }}>סה"כ {total} שעות</span>
-              </div>
-              {subjects.map(subject => {
-                const value = hours[subject.id] || 0;
-                const filled = value > 0;
-                return (
-                  <div key={subject.id} style={{ display: 'flex', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f0ebe3', gap: '10px' }}>
-                    <div style={{ flex: 1, fontSize: '14px', color: '#4a3f35' }}>{subject.subject_name}</div>
-                    <input
-                      type="number"
-                      min="0"
-                      max="15"
-                      value={value}
-                      onChange={e => setHours(prev => ({ ...prev, [subject.id]: parseInt(e.target.value) || 0 }))}
-                      style={{ width: '44px', height: '44px', textAlign: 'center', fontSize: '16px', fontWeight: '500', border: `1.5px solid ${filled ? '#8a9e78' : '#e2dacc'}`, borderRadius: '8px', background: filled ? '#EDF4E8' : '#FAF7F2', color: filled ? '#3d6b2e' : '#4a3f35', outline: 'none', MozAppearance: 'textfield' }}
-                    />
-                  </div>
-                );
-              })}
-            </>
-          ) : (
-            <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px' }}>בחר כיתה מהרשימה</div>
-          )}
-        </div>
+        {/* subject list */}
+        {!selectedGroup ? (
+          <div style={{ textAlign: 'center', color: '#c8baa6', padding: '40px', fontSize: '13px' }}>בחר/י כיתה כדי להתחיל</div>
+        ) : subjects.map(subject => {
+          const value = hours[subject.id] || 0;
+          const filled = value > 0;
+          return (
+            <div key={subject.id} style={{ display: 'flex', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f0ebe3', gap: '10px' }}>
+              <div style={{ flex: 1, fontSize: '14px', color: '#4a3f35' }}>{subject.subject_name}</div>
+              <input
+                type="number"
+                min="0"
+                max="15"
+                value={value}
+                onChange={e => setHours(prev => ({ ...prev, [subject.id]: parseInt(e.target.value) || 0 }))}
+                style={{ width: '44px', height: '44px', textAlign: 'center', fontSize: '16px', fontWeight: '500', border: `1.5px solid ${filled ? '#8a9e78' : '#e2dacc'}`, borderRadius: '8px', background: filled ? '#EDF4E8' : '#FAF7F2', color: filled ? '#3d6b2e' : '#4a3f35', outline: 'none', MozAppearance: 'textfield' }}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
