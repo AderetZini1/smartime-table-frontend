@@ -16,6 +16,26 @@ const GREEN_LIGHT = '#EDF4E8';
 const TEXT = '#4a3f35';
 const BORDER = '#e2dacc';
 
+const TEACHER_PALETTE = [
+  { bg: '#CDE7D8', color: '#2f6b4a' },
+  { bg: '#D6E4F5', color: '#33578f' },
+  { bg: '#F6DCC9', color: '#8f5b28' },
+  { bg: '#E7D8F2', color: '#5f4080' },
+  { bg: '#F5D8DF', color: '#8a3a54' },
+  { bg: '#D9EDEA', color: '#286e60' },
+  { bg: '#F2E6C9', color: '#7a611c' },
+  { bg: '#DADEF2', color: '#3c4494' },
+];
+function colorForTeacher(key) {
+  const s = String(key ?? '');
+  let hash = 5381;
+  for (let i = 0; i < s.length; i++) hash = ((hash << 5) + hash + s.charCodeAt(i)) >>> 0;
+  return TEACHER_PALETTE[hash % TEACHER_PALETTE.length];
+}
+function teacherKey(e) {
+  return e.teacher_id ?? e.teacher_color ?? `${e.teacher_first_name || ''} ${e.teacher_last_name || ''}`.trim();
+}
+
 // Build an off-screen HTML table for one schedule, styled + RTL.
 function buildScheduleElement(title, entries, showGroup, showTeacher) {
   const wrap = document.createElement('div');
@@ -66,35 +86,33 @@ function buildScheduleElement(title, entries, showGroup, showTeacher) {
       td.style.cssText = `height: 66px; font-size: 12px; color: ${TEXT}; text-align: center; vertical-align: middle; padding: 6px; border: 1px solid ${BORDER};`;
       const slot = entries.filter(e => e.day_of_week === d.num && e.hour_of_day === hour);
       if (slot.length) {
-        slot.forEach((e, idx) => {
-          if (idx > 0) {
-            const sep = document.createElement('div');
-            sep.textContent = '———';
-            sep.style.cssText = 'color: #c8baa6; font-size: 10px;';
-            td.appendChild(sep);
-          }
+        slot.forEach((e) => {
+          const pal = colorForTeacher(teacherKey(e));
+          const block = document.createElement('div');
+          block.style.cssText = `background: ${pal.bg}; border: 1px solid ${pal.color}33; border-radius: 7px; padding: 4px 5px; margin-bottom: 3px;`;
           const sub = document.createElement('div');
           sub.textContent = e.subject_name || '';
-          sub.style.cssText = 'font-weight: 600;';
-          td.appendChild(sub);
+          sub.style.cssText = `font-weight: 700; color: ${pal.color};`;
+          block.appendChild(sub);
           if (showGroup && e.group_name) {
             const g = document.createElement('div');
             g.textContent = e.group_name;
-            g.style.cssText = 'color: #8a7a6e; font-size: 11px;';
-            td.appendChild(g);
+            g.style.cssText = 'color: #6b6258; font-size: 11px;';
+            block.appendChild(g);
           }
           if (showTeacher && (e.teacher_first_name || e.teacher_last_name)) {
             const t = document.createElement('div');
             t.textContent = `${e.teacher_first_name || ''} ${e.teacher_last_name || ''}`.trim();
-            t.style.cssText = 'color: #8a7a6e; font-size: 11px;';
-            td.appendChild(t);
+            t.style.cssText = 'color: #6b6258; font-size: 11px;';
+            block.appendChild(t);
           }
           if (e.room_name) {
             const r = document.createElement('div');
             r.textContent = e.room_name;
-            r.style.cssText = 'color: #a99; font-size: 10px;';
-            td.appendChild(r);
+            r.style.cssText = 'color: #8a7a6e; font-size: 10px;';
+            block.appendChild(r);
           }
+          td.appendChild(block);
         });
       }
       tr.appendChild(td);
