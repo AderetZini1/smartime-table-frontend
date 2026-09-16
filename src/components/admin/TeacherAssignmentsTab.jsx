@@ -345,17 +345,6 @@ function TeacherPicker({
         })}
       </div>
 
-      {currentTeacherId != null && (
-        <div style={{ borderTop: '1px solid #f0ebe3', marginTop: '12px', paddingTop: '14px', display: 'flex', justifyContent: 'flex-start' }}>
-          <button
-            onClick={() => !busy && onRemove()}
-            disabled={busy}
-            style={{ backgroundColor: '#fff', color: '#c0705a', border: '1px solid #e2c4bb', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: busy ? 'default' : 'pointer', fontFamily: FONT }}
-          >
-            <i className="ti ti-user-off" aria-hidden="true"></i> הסר שיוך
-          </button>
-        </div>
-      )}
     </Modal>
   );
 }
