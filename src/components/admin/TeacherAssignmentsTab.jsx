@@ -105,7 +105,7 @@ export default function TeacherAssignmentsTab({ title }) {
     <>
       <PageHeader title={title} />
 
-      <div style={{ maxWidth: PANEL_WIDTH, margin: '0 auto' }}>
+      <div style={{ maxWidth: '620px', margin: '0 auto' }}>
         <div style={styles.card}>
           <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '4px' }}>שיוך מורים למקצועות</div>
           <div style={{ fontSize: '12px', color: '#8a7a6e', marginBottom: '16px', lineHeight: 1.5 }}>
@@ -144,7 +144,7 @@ export default function TeacherAssignmentsTab({ title }) {
             const over = teacher && isOverQuota(teacher.id);
             return (
               <div key={c.id} onClick={() => openPicker(c)}
-                style={{ display: 'grid', gridTemplateColumns: '210px 70px 1fr', alignItems: 'center', gap: '16px', padding: '11px 12px', borderBottom: '1px solid #f0ebe3', cursor: 'pointer', borderRadius: '8px' }}
+                style={{ display: 'grid', gridTemplateColumns: '160px 60px 220px', justifyContent: 'center', alignItems: 'center', gap: '28px', padding: '11px 12px', borderBottom: '1px solid #f0ebe3', cursor: 'pointer', borderRadius: '8px' }}
                 onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FAF7F2'}
                 onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
                 <div style={{ fontSize: '14px', color: '#4a3f35' }}>{subjectName(c.subject_id)}</div>
