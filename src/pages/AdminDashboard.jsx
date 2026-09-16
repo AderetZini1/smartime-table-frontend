@@ -76,7 +76,10 @@ const colorForTeacher = (id) => {
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('schedule');
+  const [activeTab, setActiveTab] = useState(() => {
+    const saved = localStorage.getItem('adminActiveTab');
+    return TABS.some(t => t.id === saved) ? saved : 'schedule';
+  });
   const [teachers, setTeachers] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [subjects, setSubjects] = useState([]);
@@ -160,6 +163,7 @@ export default function AdminDashboard() {
   const [prefSearch, setPrefSearch] = useState('');
 
   useEffect(() => {
+    localStorage.setItem('adminActiveTab', activeTab);
     getTeachers().then(r => setTeachers(r.data));
     if (activeTab === 'rooms') getRooms().then(r => setRooms(r.data));
     if (activeTab === 'subjects') { getRooms().then(r => setRooms(r.data)); getSubjects().then(r => setSubjects(r.data)); }
