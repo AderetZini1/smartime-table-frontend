@@ -2,11 +2,11 @@ import { useState, useEffect, Fragment } from 'react';
 import {
     runGeneration, runMemeticGeneration, getGenerationStatus, getCurrentSchedule,
     publishSchedule, getViolations, getSchoolSettings,
-} from '../services/api';
-import { exportSingleSchedule, exportMultiSchedule } from '../utils/exportSchedule';
-import { exportSinglePDF, exportMultiPDF } from '../utils/exportSchedulePDF';
-import { styles } from '../pages/adminDashboard.styles';
-import { fmtDate, fmtDateTime } from '../utils/format';
+} from '../../services/api';
+import { exportSingleSchedule, exportMultiSchedule } from '../../utils/exportSchedule';
+import { exportSinglePDF, exportMultiPDF } from '../../utils/exportSchedulePDF';
+import { styles } from '../../pages/adminDashboard.styles';
+import { fmtDate, fmtDateTime } from '../../utils/format';
 
 const VIEW_TYPES = [
     { id: 'class', label: 'כיתה' },
