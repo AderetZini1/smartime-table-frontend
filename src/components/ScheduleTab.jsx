@@ -21,11 +21,33 @@ const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
 const DIM_LABEL = { class: 'כיתה', teacher: 'מורה', subject: 'מקצוע', grade: 'שכבה' };
 const ALGO_LABELS = { CSP: 'CSP', HILL_CLIMBING: 'טיפוס גבעות', GENETIC: 'גנטי', GENETIC_MEMETIC: 'גנטי משופר' };
 const VIOLATION_TYPE_LABELS = {
-    ped_max_per_day: 'מעל המקסימום ליום',
-    ped_not_last: 'שיבוץ בשעה אחרונה',
-    ped_morning_only: 'לא בשעות הבוקר',
-    ped_not_consecutive: 'שיעורים צמודים (למרות בקשה לא)',
-    ped_min_gap: 'רווח מינימלי בין שיעורים',
+    // מבנה יום ושכבה
+    student_gap: 'חלונות ריקים באמצע יום הכיתה',
+    student_late_start: 'יום שלא מתחיל בשעה הראשונה',
+    empty_day: 'יום לימודים ריק לחלוטין',
+    grade_dismissal: 'שיעורים אחרי שעת הסיום של השכבה',
+    grade_max_per_day: 'מעל מקסימום השיעורים ליום (שכבה)',
+    daily_balance: 'חוסר איזון בין הימים',
+    // אילוצים פדגוגיים (הגדרות מוסד)
+    ped_max_per_day: 'מקצוע מעל המקסימום ליום',
+    ped_not_last: 'מקצוע בשיעור האחרון של היום',
+    ped_morning_only: 'מקצוע שלא בשעות הבוקר',
+    ped_not_consecutive: 'מקצועות צמודים (למרות בקשה שלא)',
+    ped_min_gap: 'רווח מינימלי בין שיעורי מקצוע',
+    // מורים
+    teacher_double_booked: 'מורה בשני מקומות בו-זמנית',
+    group_double_booked: 'כיתה עם שני שיעורים בו-זמנית',
+    weekly_hours: 'אי-התאמה במכסת השעות השבועית',
+    room_capacity: 'בעיית חדר / קיבולת',
+    sync_block: 'בעיית סנכרון בין שיעורים מקבילים',
+    teacher_cannot: 'מורה אינו יכול ללמד (אילוץ קשיח)',
+    teacher_prefers_not: 'מורה מעדיף שלא (אילוץ רך)',
+    hours_range: 'מורה מחוץ לטווח השעות שלו',
+    free_day: 'מורה ללא יום חופשי',
+    teacher_gaps: 'חלונות בין שיעורים אצל מורה',
+    early_finish: 'מורה אינו מסיים מוקדם כמבוקש',
+    consecutive: 'שיעורי מורה לא רצופים',
+    subject_distribution: 'אותו מקצוע מרוכז ביום אחד',
 };
 
 const extractGrade = (groupName) => {
