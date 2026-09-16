@@ -76,6 +76,7 @@ function DayStructureSection() {
   };
 
   return (
+    <div style={{ maxWidth: '640px', margin: '0 auto' }}>
     <div style={styles.card}>
       <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '20px' }}>מבנה יום הלימודים</div>
 
@@ -148,6 +149,7 @@ function DayStructureSection() {
         <button onClick={save} style={styles.btnAdd}>שמור הגדרות יום</button>
         {saved && <span style={{ fontSize: '13px', color: '#8a9e78' }}>✓ נשמר</span>}
       </div>
+    </div>
     </div>
   );
 }
@@ -255,6 +257,7 @@ function PedagogicalSection() {
   };
 
   return (
+    <div style={{ maxWidth: '640px', margin: '0 auto' }}>
     <div style={styles.card}>
       <div style={{ fontSize: '15px', color: '#4a3f35', marginBottom: '16px' }}>אילוצים פדגוגיים</div>
 
@@ -315,6 +318,7 @@ function PedagogicalSection() {
       })}
 
       {toDelete && <ConfirmDeleteModal name={toDelete.name} onConfirm={handleDelete} onCancel={() => setToDelete(null)} />}
+    </div>
     </div>
   );
 }
