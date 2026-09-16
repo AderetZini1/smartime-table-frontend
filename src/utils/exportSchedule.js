@@ -16,6 +16,29 @@ const GREEN_LIGHT = 'FFEDF4E8';
 const TEXT = 'FF4A3F35';
 const BORDER = 'FFE2DACC';
 
+const TEACHER_PALETTE = [
+  { bg: '#CDE7D8', color: '#2f6b4a' },
+  { bg: '#D6E4F5', color: '#33578f' },
+  { bg: '#F6DCC9', color: '#8f5b28' },
+  { bg: '#E7D8F2', color: '#5f4080' },
+  { bg: '#F5D8DF', color: '#8a3a54' },
+  { bg: '#D9EDEA', color: '#286e60' },
+  { bg: '#F2E6C9', color: '#7a611c' },
+  { bg: '#DADEF2', color: '#3c4494' },
+];
+function colorForTeacher(key) {
+  const s = String(key ?? '');
+  let hash = 5381;
+  for (let i = 0; i < s.length; i++) hash = ((hash << 5) + hash + s.charCodeAt(i)) >>> 0;
+  return TEACHER_PALETTE[hash % TEACHER_PALETTE.length];
+}
+function teacherKey(e) {
+  return e.teacher_id ?? e.teacher_color ?? `${e.teacher_first_name || ''} ${e.teacher_last_name || ''}`.trim();
+}
+function hexToArgb(hex) {
+  return 'FF' + String(hex).replace('#', '').toUpperCase();
+}
+
 // Excel sheet names can't contain : \ / ? * [ ] and must be <= 31 chars.
 function safeSheetName(name, fallback) {
   let n = (name || fallback || 'גיליון').replace(/[:\\/?*[\]]/g, ' ').trim();
@@ -56,9 +79,11 @@ function buildSheet(wb, sheetName, entries, showGroup, showTeacher) {
 
   for (const hour of HOURS) {
     const rowValues = ['שיעור ' + hour];
+    const rowSlots = [null];
     for (const day of DAYS) {
       const slot = entries.filter(e => e.day_of_week === day.num && e.hour_of_day === hour);
       rowValues.push(cellText(slot, showGroup, showTeacher));
+      rowSlots.push(slot);
     }
     const row = ws.addRow(rowValues);
     row.height = 58;
@@ -70,7 +95,14 @@ function buildSheet(wb, sheetName, entries, showGroup, showTeacher) {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GREEN_LIGHT } };
         cell.font = { name: 'Arial', size: 12, bold: true, color: { argb: TEXT } };
       } else {
-        cell.font = { name: 'Arial', size: 11, color: { argb: TEXT } };
+        const slot = rowSlots[colNumber - 1] || [];
+        const pal = slot.length ? colorForTeacher(teacherKey(slot[0])) : null;
+        if (pal) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToArgb(pal.bg) } };
+          cell.font = { name: 'Arial', size: 11, color: { argb: hexToArgb(pal.color) } };
+        } else {
+          cell.font = { name: 'Arial', size: 11, color: { argb: TEXT } };
+        }
       }
     });
   }
