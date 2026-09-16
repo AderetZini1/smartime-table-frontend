@@ -16,24 +16,24 @@ const GREEN_LIGHT = 'FFEDF4E8';
 const TEXT = 'FF4A3F35';
 const BORDER = 'FFE2DACC';
 
-const TEACHER_PALETTE = [
-  { bg: '#CDE7D8', color: '#2f6b4a' },
-  { bg: '#D6E4F5', color: '#33578f' },
-  { bg: '#F6DCC9', color: '#8f5b28' },
-  { bg: '#E7D8F2', color: '#5f4080' },
-  { bg: '#F5D8DF', color: '#8a3a54' },
-  { bg: '#D9EDEA', color: '#286e60' },
-  { bg: '#F2E6C9', color: '#7a611c' },
-  { bg: '#DADEF2', color: '#3c4494' },
+const SUBJECT_PALETTE = [
+  { bg: '#CDE7D8', accent: '#4f9c73' },
+  { bg: '#D6E4F5', accent: '#4f7fc2' },
+  { bg: '#F6DCC9', accent: '#c98a4b' },
+  { bg: '#E7D8F2', accent: '#9068b8' },
+  { bg: '#F5D8DF', accent: '#c25c7c' },
+  { bg: '#D9EDEA', accent: '#3f9e8f' },
+  { bg: '#F2E6C9', accent: '#b3922e' },
+  { bg: '#DADEF2', accent: '#5f68c2' },
 ];
-function colorForTeacher(key) {
-  const s = String(key ?? '');
+function hashString(str) {
   let hash = 5381;
-  for (let i = 0; i < s.length; i++) hash = ((hash << 5) + hash + s.charCodeAt(i)) >>> 0;
-  return TEACHER_PALETTE[hash % TEACHER_PALETTE.length];
+  for (let i = 0; i < str.length; i++) hash = ((hash << 5) + hash + str.charCodeAt(i)) >>> 0;
+  return hash;
 }
-function teacherKey(e) {
-  return e.teacher_id ?? e.teacher_color ?? `${e.teacher_first_name || ''} ${e.teacher_last_name || ''}`.trim();
+function colorForEntry(e) {
+  const key = e.subject_id != null ? String(e.subject_id) : (e.subject_name || '');
+  return SUBJECT_PALETTE[hashString(key) % SUBJECT_PALETTE.length];
 }
 function hexToArgb(hex) {
   return 'FF' + String(hex).replace('#', '').toUpperCase();
@@ -96,10 +96,11 @@ function buildSheet(wb, sheetName, entries, showGroup, showTeacher) {
         cell.font = { name: 'Arial', size: 12, bold: true, color: { argb: TEXT } };
       } else {
         const slot = rowSlots[colNumber - 1] || [];
-        const pal = slot.length ? colorForTeacher(teacherKey(slot[0])) : null;
+        const pal = slot.length ? colorForEntry(slot[0]) : null;
         if (pal) {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hexToArgb(pal.bg) } };
-          cell.font = { name: 'Arial', size: 11, color: { argb: hexToArgb(pal.color) } };
+          cell.font = { name: 'Arial', size: 11, color: { argb: TEXT } };
+          cell.border = { ...allBorders, right: { style: 'medium', color: { argb: hexToArgb(pal.accent) } } };
         } else {
           cell.font = { name: 'Arial', size: 11, color: { argb: TEXT } };
         }
