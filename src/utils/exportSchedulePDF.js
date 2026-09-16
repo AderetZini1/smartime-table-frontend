@@ -16,24 +16,24 @@ const GREEN_LIGHT = '#EDF4E8';
 const TEXT = '#4a3f35';
 const BORDER = '#e2dacc';
 
-const TEACHER_PALETTE = [
-  { bg: '#CDE7D8', color: '#2f6b4a' },
-  { bg: '#D6E4F5', color: '#33578f' },
-  { bg: '#F6DCC9', color: '#8f5b28' },
-  { bg: '#E7D8F2', color: '#5f4080' },
-  { bg: '#F5D8DF', color: '#8a3a54' },
-  { bg: '#D9EDEA', color: '#286e60' },
-  { bg: '#F2E6C9', color: '#7a611c' },
-  { bg: '#DADEF2', color: '#3c4494' },
+const SUBJECT_PALETTE = [
+  { bg: '#CDE7D8', accent: '#4f9c73' },
+  { bg: '#D6E4F5', accent: '#4f7fc2' },
+  { bg: '#F6DCC9', accent: '#c98a4b' },
+  { bg: '#E7D8F2', accent: '#9068b8' },
+  { bg: '#F5D8DF', accent: '#c25c7c' },
+  { bg: '#D9EDEA', accent: '#3f9e8f' },
+  { bg: '#F2E6C9', accent: '#b3922e' },
+  { bg: '#DADEF2', accent: '#5f68c2' },
 ];
-function colorForTeacher(key) {
-  const s = String(key ?? '');
+function hashString(str) {
   let hash = 5381;
-  for (let i = 0; i < s.length; i++) hash = ((hash << 5) + hash + s.charCodeAt(i)) >>> 0;
-  return TEACHER_PALETTE[hash % TEACHER_PALETTE.length];
+  for (let i = 0; i < str.length; i++) hash = ((hash << 5) + hash + str.charCodeAt(i)) >>> 0;
+  return hash;
 }
-function teacherKey(e) {
-  return e.teacher_id ?? e.teacher_color ?? `${e.teacher_first_name || ''} ${e.teacher_last_name || ''}`.trim();
+function colorForEntry(e) {
+  const key = e.subject_id != null ? String(e.subject_id) : (e.subject_name || '');
+  return SUBJECT_PALETTE[hashString(key) % SUBJECT_PALETTE.length];
 }
 
 // Build an off-screen HTML table for one schedule, styled + RTL.
@@ -87,12 +87,12 @@ function buildScheduleElement(title, entries, showGroup, showTeacher) {
       const slot = entries.filter(e => e.day_of_week === d.num && e.hour_of_day === hour);
       if (slot.length) {
         slot.forEach((e) => {
-          const pal = colorForTeacher(teacherKey(e));
+          const pal = colorForEntry(e);
           const block = document.createElement('div');
-          block.style.cssText = `background: ${pal.bg}; border: 1px solid ${pal.color}33; border-radius: 7px; padding: 4px 5px; margin-bottom: 3px;`;
+          block.style.cssText = `background: ${pal.bg}; border-right: 3px solid ${pal.accent}; border-radius: 8px; padding: 5px 7px; margin-bottom: 4px;`;
           const sub = document.createElement('div');
           sub.textContent = e.subject_name || '';
-          sub.style.cssText = `font-weight: 700; color: ${pal.color};`;
+          sub.style.cssText = 'font-weight: 700; color: #4a3f35;';
           block.appendChild(sub);
           if (showGroup && e.group_name) {
             const g = document.createElement('div');
