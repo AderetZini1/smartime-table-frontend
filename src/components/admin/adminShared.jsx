@@ -9,6 +9,7 @@ export const TABS = [
   { id: 'windows', label: 'חלונות הגשה', icon: 'ti-calendar-event' },
   { id: 'notifications', label: 'התראות', icon: 'ti-bell' },
   { id: 'school', label: 'הגדרות מוסד', icon: 'ti-settings' },
+  { id: 'assignments', label: 'שיוך מורים', icon: 'ti-user-check' },
   { id: 'teachers', label: 'מורים', icon: 'ti-users' },
   { id: 'rooms', label: 'חדרים', icon: 'ti-building' },
   { id: 'subjects', label: 'מקצועות', icon: 'ti-book' },
@@ -16,7 +17,7 @@ export const TABS = [
 ];
 
 // Sidebar groups (a divider is drawn between them)
-export const MAIN_NAV = ['schedule', 'history', 'requests', 'teacherprefs', 'windows', 'notifications', 'school'];
+export const MAIN_NAV = ['schedule', 'history', 'requests', 'teacherprefs', 'windows', 'notifications', 'school', 'assignments'];
 export const DATA_NAV = ['teachers', 'rooms', 'subjects', 'groups'];
 
 export const SCHOOL_TABS = [
