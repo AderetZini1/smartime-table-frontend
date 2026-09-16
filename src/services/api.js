@@ -192,6 +192,14 @@ export const deleteCurriculumRequirement = (id) => api.delete(`/curriculum-requi
 // Submission Windows
 export const getMySubmissionStatus = () => api.get('/submission-windows/active/my-status');
 export const submitMyPreferences = () => api.post('/submission-windows/active/submit');
+// Teacher Assignments (מי מלמד מה — שיוך מורה לדרישת-לימוד)
+export const getTeacherAssignments = () => api.get('/teacher-assignments/');
+export const createAssignment = (data) => api.post('/teacher-assignments/', data);
+export const updateAssignment = (id, data) => api.put(`/teacher-assignments/${id}`, data);
+export const deleteAssignment = (id) => api.delete(`/teacher-assignments/${id}`);
+export const getTeacherLoads = () => api.get('/teacher-assignments/teacher-loads');
+export const getAllTeacherSubjects = () => api.get('/teacher-subjects/all');
+export const getAllTeacherGradeLevels = () => api.get('/teacher-grade-levels/all');
 export default api;
 
 
