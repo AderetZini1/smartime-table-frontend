@@ -11,6 +11,7 @@ import TeacherPrefsTab from '../components/admin/TeacherPrefsTab';
 import WindowsTab from '../components/admin/WindowsTab';
 import NotificationsTab from '../components/admin/NotificationsTab';
 import SchoolSettingsTab from '../components/admin/SchoolSettingsTab';
+import TeacherAssignmentsTab from '../components/admin/TeacherAssignmentsTab';
 import TeachersTab from '../components/admin/TeachersTab';
 import RoomsTab from '../components/admin/RoomsTab';
 import SubjectsTab from '../components/admin/SubjectsTab';
@@ -80,6 +81,7 @@ export default function AdminDashboard() {
       case 'windows': return <WindowsTab title={title} />;
       case 'notifications': return <NotificationsTab title={title} />;
       case 'school': return <SchoolSettingsTab title={title} />;
+      case 'assignments': return <TeacherAssignmentsTab title={title} />;
       case 'teachers': return <TeachersTab title={title} />;
       case 'rooms': return <RoomsTab title={title} />;
       case 'subjects': return <SubjectsTab title={title} />;
