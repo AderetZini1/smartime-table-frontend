@@ -98,6 +98,9 @@ function buildDraft(data) {
   const p = data.prefs;
   return {
     prefs: {
+    prefs: {
+      min_hours: p?.min_hours ?? 18,
+      max_hours: p?.max_hours ?? 26,
       priority_early_finish: p?.priority_early_finish ? 1 : 0,
       priority_no_gaps: p?.priority_no_gaps ? 1 : 0,
       priority_free_day: p?.priority_free_day ? 1 : 0,
@@ -387,10 +390,26 @@ function PrioritySection({ data, draft, editing, patch, teacher }) {
   const p = data.prefs;
   return (
     <SectionBox title="העדפות שיבוץ">
-      {/* Read-only hours facts (never editable by the principal) */}
+      {/* מכסה (קריאה בלבד) + טווח מבוקש (ניתן לעריכה ע"י המנהל) */}
       <div style={{ ...infoText, marginBottom: editing ? '14px' : '0' }}>
         <div>מכסת השעות של המורה: {teacher.weekly_hours_quota ?? '—'}</div>
-        {p && <div>טווח שעות מבוקש: {p.min_hours}–{p.max_hours}</div>}
+        {!editing ? (
+          p && <div>טווח שעות מבוקש: {p.min_hours}–{p.max_hours}</div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '6px' }}>
+            <span style={{ fontSize: '13px', color: '#4a3f35' }}>טווח שעות מבוקש:</span>
+            <span style={{ fontSize: '12px', color: '#8a7a6e' }}>מינ'
+              <input type="number" min="0" max="40" value={draft.prefs.min_hours}
+                onChange={e => patch('prefs', prev => ({ ...prev, min_hours: parseInt(e.target.value) || 0 }))}
+                style={{ width: '52px', margin: '0 4px', padding: '4px 6px', textAlign: 'center', border: '1px solid #e2dacc', borderRadius: '6px', fontSize: '13px' }} />
+            </span>
+            <span style={{ fontSize: '12px', color: '#8a7a6e' }}>מקס'
+              <input type="number" min="0" max="40" value={draft.prefs.max_hours}
+                onChange={e => patch('prefs', prev => ({ ...prev, max_hours: parseInt(e.target.value) || 0 }))}
+                style={{ width: '52px', margin: '0 4px', padding: '4px 6px', textAlign: 'center', border: '1px solid #e2dacc', borderRadius: '6px', fontSize: '13px' }} />
+            </span>
+          </div>
+        )}
       </div>
 
       {!editing ? (
