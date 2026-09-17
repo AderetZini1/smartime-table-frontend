@@ -158,6 +158,8 @@ export const getGenerationStatus = (jobId) => api2.get(`/generation/${jobId}`);
 export const getCurrentSchedule = () => api2.get('/schedule/current'); // admin: whole school
 export const getMySchedule = () => api2.get('/schedule/me');           // teacher: own only
 export const publishSchedule = () => api2.post('/schedule/publish');
+export const previewScheduleViolations = (entries) => api2.post('/schedule/preview-violations', { entries });
+export const saveScheduleEdits = (runId, entries) => api2.put(`/schedule/run/${runId}/entries`, { entries });
 
 // Password reset (no login needed)
 export const forgotPassword = (email) =>
