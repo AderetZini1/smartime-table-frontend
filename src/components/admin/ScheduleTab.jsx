@@ -7,6 +7,7 @@ import { exportSingleSchedule, exportMultiSchedule } from '../../utils/exportSch
 import { exportSinglePDF, exportMultiPDF } from '../../utils/exportSchedulePDF';
 import { styles } from '../../pages/adminDashboard.styles';
 import { fmtDate, fmtDateTime } from '../../utils/format';
+import ScheduleEditor from './ScheduleEditor';
 
 const VIEW_TYPES = [
     { id: 'class', label: 'כיתה' },
@@ -150,6 +151,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
     const [showPublishConfirm, setShowPublishConfirm] = useState(false);
     const [confirmGenerateType, setConfirmGenerateType] = useState(null);
     const [breaks, setBreaks] = useState([]);
+    const [editMode, setEditMode] = useState(false);
 
     // Export: single button, two stages — pick a format first, then pick a target.
     const [exportOpen, setExportOpen] = useState(false);
@@ -380,6 +382,17 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
 
     const today = todayAppDay();
 
+    if (editMode) {
+        return (
+            <ScheduleEditor
+                initialEntries={entries}
+                runId={runInfo?.id}
+                onFinish={() => { setEditMode(false); loadSchedule(); }}
+                onCancel={() => setEditMode(false)}
+            />
+        );
+    }
+
     return (
         <>
             <div style={{ marginBottom: '18px' }}>
@@ -421,6 +434,9 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                 </button>
                 <button onClick={() => requestGenerate('improve')} disabled={generating || !runInfo} style={{ ...styles.btnOutline, padding: '13px 24px', fontSize: '16px', opacity: (generating || !runInfo) ? 0.5 : 1, cursor: (generating || !runInfo) ? 'not-allowed' : 'pointer' }}>
                     <i className="ti ti-sparkles" aria-hidden="true"></i> צור מערכת שעות חדשה
+                </button>
+                <button onClick={() => setEditMode(true)} disabled={!runInfo} style={{ ...styles.btnOutline, padding: '13px 24px', fontSize: '16px', opacity: !runInfo ? 0.5 : 1, cursor: !runInfo ? 'not-allowed' : 'pointer' }}>
+                    <i className="ti ti-edit" aria-hidden="true"></i> עריכת מערכת ידנית
                 </button>
                 <button
                     onClick={() => { if (moreMenuOpen) { setMoreMenuOpen(false); } else { setMoreMenuOpen(true); } }}
