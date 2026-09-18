@@ -497,15 +497,17 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
                                                     const overloaded = lessons.length > 1;
                                                     const isTarget = highlightEntry && highlightEntry.group_name === cls && highlightSlots.has(`${day}-${hour}`);
                                                     const isSwap = highlightEntry && highlightEntry.group_name === cls && swapSlots.has(`${day}-${hour}`);
+                                                    const isIdeaCell = lessons.some(l => hoverIds.has(l.id));
                                                     let bg;
                                                     if (overloaded) bg = '#FAE8E8';
+                                                    else if (isIdeaCell) bg = '#FBEFDD';
                                                     else if (isTarget) bg = '#e4f0da';
                                                     else if (isSwap) bg = '#d9e8f5';
                                                     return (
                                                         <td key={day}
                                                             onDragOver={(e) => e.preventDefault()}
                                                             onDrop={() => onDrop(cls, day, hour)}
-                                                            style={{ border: isTarget ? '1.5px solid #6b8f5e' : (isSwap ? '1.5px solid #4f7fc2' : '1px solid #f0ebe3'), padding: '5px', verticalAlign: 'top', height: '62px', backgroundColor: bg }}>
+                                                            style={{ border: isIdeaCell ? '1.5px solid #c98a4b' : (isTarget ? '1.5px solid #6b8f5e' : (isSwap ? '1.5px solid #4f7fc2' : '1px solid #f0ebe3')), padding: '5px', verticalAlign: 'top', height: '62px', backgroundColor: bg }}>
                                                             {lessons.length === 0 ? (
                                                                 <div style={{ border: '1.5px dashed #d8d0c0', borderRadius: '8px', padding: '5px', textAlign: 'center', color: isTarget ? '#4a7c3f' : '#c8baa6', fontSize: '11px', height: '100%' }}>{isTarget ? 'יעד אפשרי' : 'פנוי'}</div>
                                                             ) : lessons.map(e => {
@@ -514,13 +516,14 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
                                                                 const cant = hardCant.has(k);
                                                                 const pref = softNot.has(k);
                                                                 const sel = selectedId === e.id;
+                                                                const ideaHi = hoverIds.has(e.id);
                                                                 return (
                                                                     <div key={e.id} draggable
                                                                         onDragStart={() => setDragId(e.id)}
                                                                         onDragEnd={() => setDragId(null)}
                                                                         onClick={() => setSelectedId(prev => prev === e.id ? null : e.id)}
                                                                         title={cant ? 'המורה סימן/ה "לא יכול" בזמן זה' : (pref ? 'המורה סימן/ה "מעדיף שלא"' : '')}
-                                                                        style={{ borderRadius: '8px', padding: '5px 7px', marginBottom: '4px', fontSize: '11px', color: '#4a3f35', lineHeight: 1.35, backgroundColor: c.bg, borderRight: `3px solid ${c.accent}`, cursor: 'grab', outline: sel ? '2px solid #4a7c3f' : (cant ? '2px solid #c0705a' : (pref ? '2px dashed #d8bb3a' : 'none')) }}>
+                                                                        style={{ borderRadius: '8px', padding: '5px 7px', marginBottom: '4px', fontSize: '11px', color: '#4a3f35', lineHeight: 1.35, backgroundColor: c.bg, borderRight: `3px solid ${c.accent}`, cursor: 'grab', outline: ideaHi ? '2px solid #c98a4b' : (sel ? '2px solid #4a7c3f' : (cant ? '2px solid #c0705a' : (pref ? '2px dashed #d8bb3a' : 'none'))) }}>
                                                                         <div style={{ fontWeight: 700 }}>{e.subject_name}</div>
                                                                         <div style={{ color: '#8a7a6e' }}>{e.teacher_first_name} {e.teacher_last_name}</div>
                                                                         {e.room_name && <div style={{ color: '#a99', fontSize: '10px' }}>{e.room_name}</div>}
@@ -563,6 +566,29 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
                             </>
                         )}
                     </div>
+
+                    {showIdeas && (
+                        <div style={{ border: '1px solid #e2dacc', borderRadius: '12px', padding: '14px', backgroundColor: '#fff', marginTop: '14px', maxHeight: '52vh', overflowY: 'auto' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                <span style={{ fontSize: '14px', fontWeight: 700, color: '#4a3f35' }}>רעיונות סידור{ideas.length > 0 && ` (${ideas.length})`}</span>
+                                <button onClick={() => { setShowIdeas(false); setHoverIdea(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c8baa6', fontSize: '16px' }}>✕</button>
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#8a7a6e', marginBottom: '10px', lineHeight: 1.6 }}>הקדמת קודש/ליבה לבוקר בכיתות הנבחרות, ללא התנגשות. עמדי על שורה כדי לראותה בגריד; לחצי לקיבוע — ואפשר לבטל.</div>
+                            {selectedClasses.length === 0 ? (
+                                <div style={{ color: '#8a7a6e', fontSize: '13px' }}>בחרי קודם כיתה לעריכה.</div>
+                            ) : ideas.length === 0 ? (
+                                <div style={{ color: '#6b8f5e', fontSize: '13px' }}>הסידור כבר טוב — אין החלפה שתשפר את פיזור הבוקר ללא התנגשות.</div>
+                            ) : ideas.map((idea, i) => (
+                                <div key={i}
+                                    onMouseEnter={() => setHoverIdea(idea)}
+                                    onMouseLeave={() => setHoverIdea(prev => (prev === idea ? null : prev))}
+                                    onClick={() => applyIdea(idea)}
+                                    style={{ padding: '9px 10px', borderRadius: '8px', marginBottom: '6px', cursor: 'pointer', fontSize: '12px', lineHeight: 1.5, color: '#4a3f35', border: '1px solid', borderColor: hoverIdea === idea ? '#c98a4b' : '#f0ebe3', backgroundColor: hoverIdea === idea ? '#FBEFDD' : '#fff' }}>
+                                    {idea.label}{idea.soft && <span style={{ color: '#a08c30' }}> · "מעדיף שלא"</span>}
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
 
