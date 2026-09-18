@@ -221,6 +221,71 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [entries, hardCant, softNot, tsMap]);
 
+    const [showIdeas, setShowIdeas] = useState(false);
+    const [tryingIdea, setTryingIdea] = useState(null); // idea currently being examined
+
+    // Conflict-free rearrangement ideas: moves to empty slots + safe swaps,
+    // within the same class and across classes (same teacher, parallel slot).
+    const ideas = useMemo(() => {
+        if (!tsMap) return [];
+        const out = [];
+        const seen = new Set();
+        const softHit = (tid, ts) => softNot.has(`${tid}-${ts}`);
+
+        const busy = (entry, ts, ...ignore) =>
+            entries.some(e => !ignore.includes(e.id) && e.timeslot_id === ts &&
+                (e.teacher_id === entry.teacher_id || e.group_id === entry.group_id ||
+                    (entry.room_id != null && e.room_id === entry.room_id)));
+
+        entries.forEach(src => {
+            // (a) moves to an empty, conflict-free slot in the SAME class
+            DAY_ORDER.forEach(day => HOURS.forEach(hour => {
+                const ts = tsId(day, hour);
+                if (ts == null || ts === src.timeslot_id) return;
+                const occupied = entries.some(e => e.group_id === src.group_id && e.timeslot_id === ts);
+                if (occupied) return;
+                if (busy(src, ts, src.id)) return;
+                if (hardCant.has(`${src.teacher_id}-${ts}`)) return;
+                out.push({
+                    kind: 'move', ids: [src.id],
+                    label: `הזז ${src.subject_name} (${src.group_name}) → ${DAY_NAMES[day]} שעה ${hour}`,
+                    soft: softHit(src.teacher_id, ts),
+                    apply: (list) => list.map(e => e.id === src.id ? { ...e, timeslot_id: ts, day_of_week: day, hour_of_day: hour } : e),
+                });
+            });
+
+            // (b) safe swaps with ANY other lesson (same or different class),
+            //     as long as BOTH land conflict-free after the exchange.
+            entries.forEach(dst => {
+                if (dst.id <= src.id) return;               // each pair once
+                if (dst.timeslot_id === src.timeslot_id) return;
+                const key = `${src.id}-${dst.id}`;
+                if (seen.has(key)) return; seen.add(key);
+                const srcOk = !busy(src, dst.timeslot_id, src.id, dst.id) && !hardCant.has(`${src.teacher_id}-${dst.timeslot_id}`);
+                const dstOk = !busy(dst, src.timeslot_id, src.id, dst.id) && !hardCant.has(`${dst.teacher_id}-${src.timeslot_id}`);
+                if (!srcOk || !dstOk) return;
+                const cross = src.group_id !== dst.group_id;
+                out.push({
+                    kind: 'swap', ids: [src.id, dst.id],
+                    label: `החלף ${src.subject_name} (${src.group_name}) ↔ ${dst.subject_name} (${dst.group_name})${cross ? ' — בין כיתות' : ''}`,
+                    soft: softHit(src.teacher_id, dst.timeslot_id) || softHit(dst.teacher_id, src.timeslot_id),
+                    apply: (list) => list.map(e => {
+                        if (e.id === src.id) return { ...e, timeslot_id: dst.timeslot_id, day_of_week: dst.day_of_week, hour_of_day: dst.hour_of_day };
+                        if (e.id === dst.id) return { ...e, timeslot_id: src.timeslot_id, day_of_week: src.day_of_week, hour_of_day: src.hour_of_day };
+                        return e;
+                    }),
+                });
+            });
+        });
+        // prefer non-soft ideas first, cap the list
+        return out.sort((a, b) => (a.soft === b.soft ? 0 : a.soft ? 1 : -1)).slice(0, 60);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [entries, hardCant, softNot, tsMap]);
+
+    const examineIdea = (idea) => { commit(idea.apply(entries)); setTryingIdea(idea); };
+    const undoIdea = () => { undo(); setTryingIdea(null); };
+    const keepIdea = () => setTryingIdea(null);
+
     // ---- drag & drop ----
     const onDrop = (cls, day, hour) => {
         const id = dragId; setDragId(null);
@@ -295,12 +360,26 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
         <div dir="rtl">
             {/* toolbar */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '14px' }}>
-                <h2 style={{ fontSize: '18px', color: '#4a3f35', margin: 0, marginLeft: 'auto' }}>עריכת מערכת שעות</h2>
+                <h2 style={{ fontSize: '18px', color: '#4a3f35', margin: 0 }}>עריכת מערכת שעות</h2>
+                <div style={{ display: 'flex', gap: '7px', marginLeft: 'auto', fontSize: '12px' }}>
+                    <span style={{ padding: '5px 11px', borderRadius: '20px', backgroundColor: conflicts.length ? '#FAE8E8' : '#EDF4E8', color: conflicts.length ? '#c0705a' : '#4a7c3f' }}>
+                        {conflicts.length} התנגשויות
+                    </span>
+                    <span style={{ padding: '5px 11px', borderRadius: '20px', backgroundColor: '#FAE8E8', color: '#c0705a' }}>
+                        {advisories.filter(a => a.sev === 'hard').length} "לא יכול"
+                    </span>
+                    <span style={{ padding: '5px 11px', borderRadius: '20px', backgroundColor: '#FFF3D6', color: '#a08c30' }}>
+                        {advisories.filter(a => a.sev === 'soft').length} "מעדיף שלא"
+                    </span>
+                </div>
                 <button onClick={() => setColorMode(m => m === 'subject' ? 'teacher' : 'subject')} style={btn('#fff', '#4a3f35')}>
                     צבעים: {colorMode === 'subject' ? 'לפי מקצוע' : 'לפי מורה'}
                 </button>
                 <button onClick={() => setShowSuggest(true)} style={btn('#EDF4E8', '#4a7c3f')}>
                     הצעות לשיפור{suggestions.length > 0 && ` (${suggestions.length})`}
+                </button>
+                <button onClick={() => setShowIdeas(true)} style={btn('#EDF4E8', '#4a7c3f')}>
+                    רעיונות סידור{ideas.length > 0 && ` (${ideas.length})`}
                 </button>
                 <button onClick={undo} disabled={!past.length} style={btn('#fff', '#4a3f35', { opacity: past.length ? 1 : 0.4 })}>↶ בטל</button>
                 <button onClick={redo} disabled={!future.length} style={btn('#fff', '#4a3f35', { opacity: future.length ? 1 : 0.4 })}>↷ בצע שוב</button>
@@ -313,6 +392,13 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
             </div>
 
             {saveError && <div style={{ color: '#c0705a', fontSize: '13px', marginBottom: '10px' }}>{saveError}</div>}
+            {tryingIdea && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: '#EAF1FB', border: '1px solid #c3d6ee', borderRadius: '10px', padding: '10px 14px', marginBottom: '12px', fontSize: '13px', color: '#3a5a80' }}>
+                    <span style={{ flex: 1 }}>בוחן רעיון: <b>{tryingIdea.label}</b></span>
+                    <button onClick={keepIdea} style={btn('#6b8f5e', '#fff', { padding: '6px 14px', fontSize: '13px', border: 'none' })}>השאר</button>
+                    <button onClick={undoIdea} style={btn('#fff', '#8a7a6e', { padding: '6px 14px', fontSize: '13px' })}>ביטול</button>
+                </div>
+            )}
 
             {draftFound && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: '#FFF3D6', border: '1px solid #e8d9a8', borderRadius: '10px', padding: '10px 14px', marginBottom: '12px', fontSize: '13px', color: '#8a6d1e' }}>
@@ -507,6 +593,28 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
                                     {s.entry.subject_name} · {s.entry.teacher_first_name} {s.entry.teacher_last_name}: מ{slotLabel(s.entry)} ← {DAY_NAMES[s.alt.day]} שעה {s.alt.hour}
                                 </span>
                                 <button onClick={() => applyMove(s.id, s.alt.ts, s.alt.day, s.alt.hour)} style={btn('#6b8f5e', '#fff', { padding: '7px 14px', fontSize: '13px', border: 'none' })}>החל</button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* rearrangement ideas */}
+            {showIdeas && (
+                <div onClick={() => setShowIdeas(false)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                    <div onClick={e => e.stopPropagation()} dir="rtl" style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1px solid #e2dacc', padding: '24px', width: '640px', maxWidth: '92vw', maxHeight: '80vh', overflowY: 'auto' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <h2 style={{ fontSize: '17px', color: '#4a3f35', margin: 0 }}>רעיונות סידור (ללא התנגשות)</h2>
+                            <button onClick={() => setShowIdeas(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c8baa6', fontSize: '20px' }}>✕</button>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#8a7a6e', marginBottom: '14px' }}>לחצי "בחן" כדי להחיל זמנית ולראות בגריד — ואז "השאר" או "ביטול".</div>
+                        {ideas.length === 0 ? (
+                            <div style={{ color: '#8a7a6e', fontSize: '14px' }}>אין תזוזות פנויות ללא התנגשות כרגע.</div>
+                        ) : ideas.map((idea, i) => (
+                            <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f0ebe3' }}>
+                                <span style={{ flexShrink: 0, fontSize: '11px', padding: '3px 9px', borderRadius: '20px', backgroundColor: idea.kind === 'swap' ? '#EAF1FB' : '#EDF4E8', color: idea.kind === 'swap' ? '#3a5a80' : '#4a7c3f' }}>{idea.kind === 'swap' ? 'החלפה' : 'הזזה'}</span>
+                                <span style={{ flex: 1, fontSize: '13px', color: '#4a3f35' }}>{idea.label}{idea.soft && <span style={{ color: '#a08c30' }}> · "מעדיף שלא"</span>}</span>
+                                <button onClick={() => { examineIdea(idea); setShowIdeas(false); }} style={btn('#6b8f5e', '#fff', { padding: '7px 14px', fontSize: '13px', border: 'none' })}>בחן</button>
                             </div>
                         ))}
                     </div>
