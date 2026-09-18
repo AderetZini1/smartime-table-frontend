@@ -180,6 +180,32 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [highlightEntry, entries, tsMap, hardCant]);
 
+        // Occupied cells that could SWAP with the highlighted lesson with zero new
+    // conflicts (teacher/class/room free + no hard "can't" for both, both ways).
+    const swapSlots = useMemo(() => {
+        const s = new Set();
+        if (!highlightEntry || !tsMap) return s;
+        const src = highlightEntry;
+        DAY_ORDER.forEach(day => HOURS.forEach(hour => {
+            const ts = tsId(day, hour);
+            if (ts == null || ts === src.timeslot_id) return;
+            const occ = entries.find(e => e.group_id === src.group_id && e.timeslot_id === ts && e.id !== src.id);
+            if (!occ) return; // empty cell handled by highlightSlots
+            const free = (entry, slot, ignoreA, ignoreB) => {
+                const teacher = entries.some(e => e.id !== ignoreA && e.id !== ignoreB && e.teacher_id === entry.teacher_id && e.timeslot_id === slot);
+                const room = entry.room_id != null && entries.some(e => e.id !== ignoreA && e.id !== ignoreB && e.room_id === entry.room_id && e.timeslot_id === slot);
+                const cant = hardCant.has(`${entry.teacher_id}-${slot}`);
+                return !teacher && !room && !cant;
+            };
+            // src -> occ's slot, occ -> src's slot (ignore each other during the check)
+            if (free(src, ts, src.id, occ.id) && free(occ, src.timeslot_id, src.id, occ.id)) {
+                s.add(`${day}-${hour}`);
+            }
+        }));
+        return s;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [highlightEntry, entries, tsMap, hardCant]);
+
     // ---- improvement suggestions (constraint-based) ----
     const suggestions = useMemo(() => {
         if (!tsMap) return [];
@@ -344,14 +370,16 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
                                                     const lessons = cellFor(cls, day, hour);
                                                     const overloaded = lessons.length > 1;
                                                     const isTarget = highlightEntry && highlightEntry.group_name === cls && highlightSlots.has(`${day}-${hour}`);
+                                                    const isSwap = highlightEntry && highlightEntry.group_name === cls && swapSlots.has(`${day}-${hour}`);
                                                     let bg;
                                                     if (overloaded) bg = '#FAE8E8';
                                                     else if (isTarget) bg = '#e4f0da';
+                                                    else if (isSwap) bg = '#d9e8f5';
                                                     return (
                                                         <td key={day}
                                                             onDragOver={(e) => e.preventDefault()}
                                                             onDrop={() => onDrop(cls, day, hour)}
-                                                            style={{ border: isTarget ? '1.5px solid #6b8f5e' : '1px solid #f0ebe3', padding: '5px', verticalAlign: 'top', height: '62px', backgroundColor: bg }}>
+                                                            style={{ border: isTarget ? '1.5px solid #6b8f5e' : (isSwap ? '1.5px solid #4f7fc2' : '1px solid #f0ebe3'), padding: '5px', verticalAlign: 'top', height: '62px', backgroundColor: bg }}>
                                                             {lessons.length === 0 ? (
                                                                 <div style={{ border: '1.5px dashed #d8d0c0', borderRadius: '8px', padding: '5px', textAlign: 'center', color: isTarget ? '#4a7c3f' : '#c8baa6', fontSize: '11px', height: '100%' }}>{isTarget ? 'יעד אפשרי' : 'פנוי'}</div>
                                                             ) : lessons.map(e => {
