@@ -31,6 +31,39 @@ const btn = (bg, color, extra = {}) => ({
     cursor: 'pointer', fontFamily: 'Varela Round, sans-serif', backgroundColor: bg, color, ...extra,
 });
 
+
+// Count physical conflicts (teacher / class / room double-bookings).
+function countConflictsIn(list) {
+    const bySlot = {};
+    list.forEach(e => { (bySlot[e.timeslot_id] = bySlot[e.timeslot_id] || []).push(e); });
+    let n = 0;
+    Object.values(bySlot).forEach(group => {
+        const dup = (keyFn) => {
+            const m = {};
+            group.forEach(e => { const k = keyFn(e); if (k != null) (m[k] = m[k] || []).push(e); });
+            return Object.values(m).filter(g => g.length > 1).length;
+        };
+        n += dup(e => e.teacher_id) + dup(e => e.group_id) + dup(e => (e.room_id != null ? e.room_id : null));
+    });
+    return n;
+}
+
+
+// Subjects that pedagogically belong earlier in the day. Edit freely — first
+// matching keyword group wins; unmatched subjects get the default weight (1).
+const MORNING_PRIORITY = [
+    { kw: ['קודש', 'תורה', 'גמרא', 'משנה', 'תנ"ך', 'תנך', 'חומש', 'הלכה', 'נביא', 'פרשה'], w: 5 },
+    { kw: ['חשבון', 'מתמט', 'גאומ', 'הנדסה'], w: 4 },
+    { kw: ['עברית', 'קריאה', 'לשון', 'הבעה', 'כתיבה'], w: 4 },
+    { kw: ['אנגלית'], w: 3 },
+    { kw: ['מדע', 'טבע', 'ביולוג', 'פיזיק', 'כימ'], w: 3 },
+];
+function subjectPriority(name) {
+    if (!name) return 1;
+    for (const g of MORNING_PRIORITY) if (g.kw.some(k => name.includes(k))) return g.w;
+    return 1;
+}
+
 export default function ScheduleEditor({ initialEntries, runId, onFinish, onCancel }) {
     // Deep-copied working copy of the FULL schedule (all classes).
     const [entries, setEntries] = useState(() => initialEntries.map(e => ({ ...e })));
@@ -224,63 +257,61 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
     const [showIdeas, setShowIdeas] = useState(false);
     const [tryingIdea, setTryingIdea] = useState(null); // idea currently being examined
 
-    // Conflict-free rearrangement ideas: moves to empty slots + safe swaps,
-    // within the same class and across classes (same teacher, parallel slot).
+    // Smart, pedagogical rearrangement ideas, scoped to the selected classes:
+    // same-day swaps that pull a higher morning-priority subject (kodesh / core)
+    // to an earlier hour, at zero physical conflict. Same-day intra-class swaps
+    // don't change the class's daily structure, so only teacher/room/hard-"can't"
+    // feasibility needs checking. Benefit = (pB - pA) * (hourB - hourA).
     const ideas = useMemo(() => {
-        if (!tsMap) return [];
+        if (selectedClasses.length === 0) return [];
         const out = [];
-        const seen = new Set();
-        const softHit = (tid, ts) => softNot.has(`${tid}-${ts}`);
+        const teacherBusy = (tid, ts, ...ignore) =>
+            entries.some(e => !ignore.includes(e.id) && e.teacher_id === tid && e.timeslot_id === ts);
+        const roomBusy = (rid, ts, ...ignore) =>
+            rid != null && entries.some(e => !ignore.includes(e.id) && e.room_id === rid && e.timeslot_id === ts);
 
-        const busy = (entry, ts, ...ignore) =>
-            entries.some(e => !ignore.includes(e.id) && e.timeslot_id === ts &&
-                (e.teacher_id === entry.teacher_id || e.group_id === entry.group_id ||
-                    (entry.room_id != null && e.room_id === entry.room_id)));
+        selectedClasses.forEach(cls => {
+            const byDay = {};
+            entries.filter(e => e.group_name === cls)
+                .forEach(e => { (byDay[e.day_of_week] = byDay[e.day_of_week] || []).push(e); });
 
-        entries.forEach(src => {
-            // (a) moves to an empty, conflict-free slot in the SAME class
-            DAY_ORDER.forEach(day => HOURS.forEach(hour => {
-                const ts = tsId(day, hour);
-                if (ts == null || ts === src.timeslot_id) return;
-                const occupied = entries.some(e => e.group_id === src.group_id && e.timeslot_id === ts);
-                if (occupied) return;
-                if (busy(src, ts, src.id)) return;
-                if (hardCant.has(`${src.teacher_id}-${ts}`)) return;
-                out.push({
-                    kind: 'move', ids: [src.id],
-                    label: `הזז ${src.subject_name} (${src.group_name}) → ${DAY_NAMES[day]} שעה ${hour}`,
-                    soft: softHit(src.teacher_id, ts),
-                    apply: (list) => list.map(e => e.id === src.id ? { ...e, timeslot_id: ts, day_of_week: day, hour_of_day: hour } : e),
-                });
-            }));
-
-            // (b) safe swaps with ANY other lesson (same or different class),
-            //     as long as BOTH land conflict-free after the exchange.
-            entries.forEach(dst => {
-                if (dst.id <= src.id) return;               // each pair once
-                if (dst.timeslot_id === src.timeslot_id) return;
-                const key = `${src.id}-${dst.id}`;
-                if (seen.has(key)) return; seen.add(key);
-                const srcOk = !busy(src, dst.timeslot_id, src.id, dst.id) && !hardCant.has(`${src.teacher_id}-${dst.timeslot_id}`);
-                const dstOk = !busy(dst, src.timeslot_id, src.id, dst.id) && !hardCant.has(`${dst.teacher_id}-${src.timeslot_id}`);
-                if (!srcOk || !dstOk) return;
-                const cross = src.group_id !== dst.group_id;
-                out.push({
-                    kind: 'swap', ids: [src.id, dst.id],
-                    label: `החלף ${src.subject_name} (${src.group_name}) ↔ ${dst.subject_name} (${dst.group_name})${cross ? ' — בין כיתות' : ''}`,
-                    soft: softHit(src.teacher_id, dst.timeslot_id) || softHit(dst.teacher_id, src.timeslot_id),
-                    apply: (list) => list.map(e => {
-                        if (e.id === src.id) return { ...e, timeslot_id: dst.timeslot_id, day_of_week: dst.day_of_week, hour_of_day: dst.hour_of_day };
-                        if (e.id === dst.id) return { ...e, timeslot_id: src.timeslot_id, day_of_week: src.day_of_week, hour_of_day: src.hour_of_day };
-                        return e;
-                    }),
-                });
+            Object.values(byDay).forEach(dayLessons => {
+                for (let i = 0; i < dayLessons.length; i++) {
+                    for (let j = i + 1; j < dayLessons.length; j++) {
+                        let A = dayLessons[i], B = dayLessons[j];
+                        if (A.hour_of_day === B.hour_of_day) continue;
+                        if (A.hour_of_day > B.hour_of_day) { const t = A; A = B; B = t; } // A = earlier
+                        const pA = subjectPriority(A.subject_name), pB = subjectPriority(B.subject_name);
+                        if (pB <= pA) continue; // only pull a HIGHER-priority subject earlier
+                        // feasibility of the same-day swap (ignore A and B themselves)
+                        const aOk = !teacherBusy(A.teacher_id, B.timeslot_id, A.id, B.id) &&
+                            !roomBusy(A.room_id, B.timeslot_id, A.id, B.id) &&
+                            !hardCant.has(`${A.teacher_id}-${B.timeslot_id}`);
+                        const bOk = !teacherBusy(B.teacher_id, A.timeslot_id, A.id, B.id) &&
+                            !roomBusy(B.room_id, A.timeslot_id, A.id, B.id) &&
+                            !hardCant.has(`${B.teacher_id}-${A.timeslot_id}`);
+                        if (!aOk || !bOk) continue;
+                        const sameTeacher = A.teacher_id === B.teacher_id;
+                        const soft = softNot.has(`${A.teacher_id}-${B.timeslot_id}`) || softNot.has(`${B.teacher_id}-${A.timeslot_id}`);
+                        out.push({
+                            ids: [A.id, B.id],
+                            improvement: (pB - pA) * (B.hour_of_day - A.hour_of_day),
+                            soft,
+                            label: `${cls}, ${DAY_NAMES[A.day_of_week]}: הקדם ${B.subject_name} לשעה ${A.hour_of_day} (במקום ${A.subject_name})${sameTeacher ? ' — אותו מורה' : ''}`,
+                            apply: (list) => list.map(e => {
+                                if (e.id === A.id) return { ...e, timeslot_id: B.timeslot_id, day_of_week: B.day_of_week, hour_of_day: B.hour_of_day };
+                                if (e.id === B.id) return { ...e, timeslot_id: A.timeslot_id, day_of_week: A.day_of_week, hour_of_day: A.hour_of_day };
+                                return e;
+                            }),
+                        });
+                    }
+                }
             });
         });
-        // prefer non-soft ideas first, cap the list
-        return out.sort((a, b) => (a.soft === b.soft ? 0 : a.soft ? 1 : -1)).slice(0, 60);
+        // best benefit first; soft-"prefers not" ideas sink to the bottom
+        return out.sort((a, b) => (a.soft !== b.soft ? (a.soft ? 1 : -1) : b.improvement - a.improvement)).slice(0, 40);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [entries, hardCant, softNot, tsMap]);
+    }, [entries, selectedClasses, hardCant, softNot]);
 
     const examineIdea = (idea) => { commit(idea.apply(entries)); setTryingIdea(idea); };
     const undoIdea = () => { undo(); setTryingIdea(null); };
@@ -310,7 +341,20 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
         const sameCls = entries.filter(e => e.id !== src.id && e.group_id === src.group_id && e.timeslot_id === occMenu.ts);
         const teacherBusy = entries.filter(e => e.id !== src.id && e.teacher_id === src.teacher_id && e.timeslot_id === occMenu.ts);
         const roomBusy = src.room_id != null ? entries.filter(e => e.id !== src.id && e.room_id === src.room_id && e.timeslot_id === occMenu.ts) : [];
-        return { src, sameCls, teacherBusy, roomBusy, occ: sameCls[0] || null };
+        const occ = sameCls[0] || null;
+        const base = countConflictsIn(entries);
+        const placeNext = entries.map(e => e.id === src.id ? { ...e, timeslot_id: occMenu.ts, day_of_week: occMenu.day, hour_of_day: occMenu.hour } : e);
+        const placeCreates = countConflictsIn(placeNext) > base;
+        let swapCreates = false;
+        if (occ) {
+            const swapNext = entries.map(e => {
+                if (e.id === src.id) return { ...e, timeslot_id: occMenu.ts, day_of_week: occMenu.day, hour_of_day: occMenu.hour };
+                if (e.id === occ.id) return { ...e, timeslot_id: src.timeslot_id, day_of_week: src.day_of_week, hour_of_day: src.hour_of_day };
+                return e;
+            });
+            swapCreates = countConflictsIn(swapNext) > base;
+        }
+        return { src, sameCls, teacherBusy, roomBusy, occ, placeCreates, swapCreates };
     };
     const doSwap = () => {
         const d = occDerived(); if (!d || !d.occ) return;
@@ -542,10 +586,10 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
 
                         {altsFor === null && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                {d.occ && <button onClick={doSwap} style={btn('#EDF4E8', '#4a7c3f', { textAlign: 'right' })}>החלפה — {d.src.subject_name} ↔ {d.occ.subject_name}</button>}
+                                {d.occ && <button onClick={doSwap} style={btn(d.swapCreates ? '#fff' : '#EDF4E8', d.swapCreates ? '#a08c30' : '#4a7c3f', { textAlign: 'right' })}>החלפה — {d.src.subject_name} ↔ {d.occ.subject_name}{d.swapCreates ? ' (תיווצר התנגשות)' : ' (ללא התנגשות)'}</button>}
                                 <button onClick={() => setAltsFor('source')} style={btn('#fff', '#4a3f35', { textAlign: 'right' })}>הצעות חלופיות ל־{d.src.subject_name}</button>
                                 {d.occ && <button onClick={() => setAltsFor('occupant')} style={btn('#fff', '#4a3f35', { textAlign: 'right' })}>הצעות חלופיות ל־{d.occ.subject_name}</button>}
-                                <button onClick={doPlaceAnyway} style={btn('#fff', '#a08c30', { textAlign: 'right' })}>הצב בכל זאת (תיווצר התנגשות)</button>
+                                <button onClick={doPlaceAnyway} style={btn('#fff', '#a08c30', { textAlign: 'right' })}>הצב בכל זאת{d.placeCreates ? ' (תיווצר התנגשות)' : ''}</button>
                                 <button onClick={() => setOccMenu(null)} style={btn('#fff', '#8a7a6e', { textAlign: 'right' })}>ביטול</button>
                             </div>
                         )}
@@ -607,12 +651,14 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
                             <h2 style={{ fontSize: '17px', color: '#4a3f35', margin: 0 }}>רעיונות סידור (ללא התנגשות)</h2>
                             <button onClick={() => setShowIdeas(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c8baa6', fontSize: '20px' }}>✕</button>
                         </div>
-                        <div style={{ fontSize: '12px', color: '#8a7a6e', marginBottom: '14px' }}>לחצי "בחן" כדי להחיל זמנית ולראות בגריד — ואז "השאר" או "ביטול".</div>
-                        {ideas.length === 0 ? (
-                            <div style={{ color: '#8a7a6e', fontSize: '14px' }}>אין תזוזות פנויות ללא התנגשות כרגע.</div>
+                        <div style={{ fontSize: '12px', color: '#8a7a6e', marginBottom: '14px' }}>הצעות להקדים שיעורי קודש/ליבה לשעות מוקדמות יותר בכיתות שנבחרו, ע״י החלפה באותו יום — ללא התנגשות. "בחן" מחיל זמנית; אחר כך "השאר" או "ביטול".</div>
+                        {selectedClasses.length === 0 ? (
+                            <div style={{ color: '#8a7a6e', fontSize: '14px' }}>בחרי קודם כיתה לעריכה, ואציע לה סידור.</div>
+                        ) : ideas.length === 0 ? (
+                            <div style={{ color: '#6b8f5e', fontSize: '14px' }}>הסידור הנוכחי כבר טוב — אין החלפה שתשפר את פיזור הבוקר ללא התנגשות.</div>
                         ) : ideas.map((idea, i) => (
                             <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f0ebe3' }}>
-                                <span style={{ flexShrink: 0, fontSize: '11px', padding: '3px 9px', borderRadius: '20px', backgroundColor: idea.kind === 'swap' ? '#EAF1FB' : '#EDF4E8', color: idea.kind === 'swap' ? '#3a5a80' : '#4a7c3f' }}>{idea.kind === 'swap' ? 'החלפה' : 'הזזה'}</span>
+                                <span style={{ flexShrink: 0, fontSize: '11px', padding: '3px 9px', borderRadius: '20px', backgroundColor: '#EAF1FB', color: '#3a5a80' }}>החלפה</span>
                                 <span style={{ flex: 1, fontSize: '13px', color: '#4a3f35' }}>{idea.label}{idea.soft && <span style={{ color: '#a08c30' }}> · "מעדיף שלא"</span>}</span>
                                 <button onClick={() => { examineIdea(idea); setShowIdeas(false); }} style={btn('#6b8f5e', '#fff', { padding: '7px 14px', fontSize: '13px', border: 'none' })}>בחן</button>
                             </div>
