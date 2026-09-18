@@ -52,11 +52,7 @@ function countConflictsIn(list) {
 // Subjects that pedagogically belong earlier in the day. Edit freely — first
 // matching keyword group wins; unmatched subjects get the default weight (1).
 const MORNING_PRIORITY = [
-    { kw: ['קודש', 'תורה', 'גמרא', 'משנה', 'תנ"ך', 'תנך', 'חומש', 'הלכה', 'נביא', 'פרשה'], w: 5 },
-    { kw: ['חשבון', 'מתמט', 'גאומ', 'הנדסה'], w: 4 },
-    { kw: ['עברית', 'קריאה', 'לשון', 'הבעה', 'כתיבה'], w: 4 },
-    { kw: ['אנגלית'], w: 3 },
-    { kw: ['מדע', 'טבע', 'ביולוג', 'פיזיק', 'כימ'], w: 3 },
+    { kw: ['תורה', 'כישורי חיים', 'כישורי', 'פרשת שבוע', 'פרשה', 'חינוך מתוך אמונה', 'אמונה', 'הלכה'], w: 5 },
 ];
 function subjectPriority(name) {
     if (!name) return 1;
@@ -255,7 +251,8 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
     }, [entries, hardCant, softNot, tsMap]);
 
     const [showIdeas, setShowIdeas] = useState(false);
-    const [tryingIdea, setTryingIdea] = useState(null); // idea currently being examined
+    const [hoverIdea, setHoverIdea] = useState(null);   // idea highlighted on hover
+    const [tryingIdea, setTryingIdea] = useState(null); // last applied idea (undoable)
 
     // Smart, pedagogical rearrangement ideas, scoped to the selected classes:
     // same-day swaps that pull a higher morning-priority subject (kodesh / core)
@@ -313,9 +310,9 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [entries, selectedClasses, hardCant, softNot]);
 
-    const examineIdea = (idea) => { commit(idea.apply(entries)); setTryingIdea(idea); };
+    const applyIdea = (idea) => { commit(idea.apply(entries)); setTryingIdea(idea); setHoverIdea(null); };
     const undoIdea = () => { undo(); setTryingIdea(null); };
-    const keepIdea = () => setTryingIdea(null);
+    const hoverIds = new Set(hoverIdea ? hoverIdea.ids : []);
 
     // ---- drag & drop ----
     const onDrop = (cls, day, hour) => {
@@ -422,7 +419,7 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
                 <button onClick={() => setShowSuggest(true)} style={btn('#EDF4E8', '#4a7c3f')}>
                     הצעות לשיפור{suggestions.length > 0 && ` (${suggestions.length})`}
                 </button>
-                <button onClick={() => setShowIdeas(true)} style={btn('#EDF4E8', '#4a7c3f')}>
+                <button onClick={() => setShowIdeas(v => !v)} style={btn(showIdeas ? '#6b8f5e' : '#EDF4E8', showIdeas ? '#fff' : '#4a7c3f', showIdeas ? { border: 'none' } : {})}>
                     רעיונות סידור{ideas.length > 0 && ` (${ideas.length})`}
                 </button>
                 <button onClick={undo} disabled={!past.length} style={btn('#fff', '#4a3f35', { opacity: past.length ? 1 : 0.4 })}>↶ בטל</button>
@@ -438,8 +435,7 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
             {saveError && <div style={{ color: '#c0705a', fontSize: '13px', marginBottom: '10px' }}>{saveError}</div>}
             {tryingIdea && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: '#EAF1FB', border: '1px solid #c3d6ee', borderRadius: '10px', padding: '10px 14px', marginBottom: '12px', fontSize: '13px', color: '#3a5a80' }}>
-                    <span style={{ flex: 1 }}>בוחן רעיון: <b>{tryingIdea.label}</b></span>
-                    <button onClick={keepIdea} style={btn('#6b8f5e', '#fff', { padding: '6px 14px', fontSize: '13px', border: 'none' })}>השאר</button>
+                    <span style={{ flex: 1 }}>בוצעה החלפה: <b>{tryingIdea.label}</b></span>
                     <button onClick={undoIdea} style={btn('#fff', '#8a7a6e', { padding: '6px 14px', fontSize: '13px' })}>ביטול</button>
                 </div>
             )}
@@ -544,8 +540,8 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
                 </div>
 
                 {/* side panel */}
-                <div style={{ width: '300px', flexShrink: 0 }}>
-                    <div style={{ border: '1px solid #e2dacc', borderRadius: '12px', padding: '14px', backgroundColor: '#fff', position: 'sticky', top: '10px' }}>
+                <div style={{ width: '320px', flexShrink: 0, position: 'sticky', top: '10px' }}>
+                    <div style={{ border: '1px solid #e2dacc', borderRadius: '12px', padding: '14px', backgroundColor: '#fff' }}>
                         <div style={{ fontSize: '14px', fontWeight: 700, color: '#4a3f35', marginBottom: '10px' }}>
                             התנגשויות פעילות {conflicts.length > 0 && <span style={{ color: '#c0705a' }}>({conflicts.length})</span>}
                         </div>
@@ -637,30 +633,6 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
                                     {s.entry.subject_name} · {s.entry.teacher_first_name} {s.entry.teacher_last_name}: מ{slotLabel(s.entry)} ← {DAY_NAMES[s.alt.day]} שעה {s.alt.hour}
                                 </span>
                                 <button onClick={() => applyMove(s.id, s.alt.ts, s.alt.day, s.alt.hour)} style={btn('#6b8f5e', '#fff', { padding: '7px 14px', fontSize: '13px', border: 'none' })}>החל</button>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* rearrangement ideas */}
-            {showIdeas && (
-                <div onClick={() => setShowIdeas(false)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-                    <div onClick={e => e.stopPropagation()} dir="rtl" style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1px solid #e2dacc', padding: '24px', width: '640px', maxWidth: '92vw', maxHeight: '80vh', overflowY: 'auto' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                            <h2 style={{ fontSize: '17px', color: '#4a3f35', margin: 0 }}>רעיונות סידור (ללא התנגשות)</h2>
-                            <button onClick={() => setShowIdeas(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c8baa6', fontSize: '20px' }}>✕</button>
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#8a7a6e', marginBottom: '14px' }}>הצעות להקדים שיעורי קודש/ליבה לשעות מוקדמות יותר בכיתות שנבחרו, ע״י החלפה באותו יום — ללא התנגשות. "בחן" מחיל זמנית; אחר כך "השאר" או "ביטול".</div>
-                        {selectedClasses.length === 0 ? (
-                            <div style={{ color: '#8a7a6e', fontSize: '14px' }}>בחרי קודם כיתה לעריכה, ואציע לה סידור.</div>
-                        ) : ideas.length === 0 ? (
-                            <div style={{ color: '#6b8f5e', fontSize: '14px' }}>הסידור הנוכחי כבר טוב — אין החלפה שתשפר את פיזור הבוקר ללא התנגשות.</div>
-                        ) : ideas.map((idea, i) => (
-                            <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f0ebe3' }}>
-                                <span style={{ flexShrink: 0, fontSize: '11px', padding: '3px 9px', borderRadius: '20px', backgroundColor: '#EAF1FB', color: '#3a5a80' }}>החלפה</span>
-                                <span style={{ flex: 1, fontSize: '13px', color: '#4a3f35' }}>{idea.label}{idea.soft && <span style={{ color: '#a08c30' }}> · "מעדיף שלא"</span>}</span>
-                                <button onClick={() => { examineIdea(idea); setShowIdeas(false); }} style={btn('#6b8f5e', '#fff', { padding: '7px 14px', fontSize: '13px', border: 'none' })}>בחן</button>
                             </div>
                         ))}
                     </div>
