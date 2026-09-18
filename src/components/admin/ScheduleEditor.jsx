@@ -252,7 +252,7 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
                     soft: softHit(src.teacher_id, ts),
                     apply: (list) => list.map(e => e.id === src.id ? { ...e, timeslot_id: ts, day_of_week: day, hour_of_day: hour } : e),
                 });
-            });
+            }));
 
             // (b) safe swaps with ANY other lesson (same or different class),
             //     as long as BOTH land conflict-free after the exchange.
