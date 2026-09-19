@@ -163,6 +163,14 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
     const undo = () => { if (!past.length) return; setFuture(f => [entries, ...f]); setEntries(past[past.length - 1]); setPast(past.slice(0, -1)); };
     const redo = () => { if (!future.length) return; setPast(p => [...p, entries]); setEntries(future[0]); setFuture(future.slice(1)); };
 
+    const resetAll = () => {
+        if (!dirty) return;
+        if (!window.confirm('לבטל את כל השינויים ולחזור למערכת המקורית?')) return;
+        setPast([]); setFuture([]);
+        setEntries(initialEntries.map(e => ({ ...e })));
+        try { localStorage.removeItem(draftKey); } catch { /* */ }
+    };
+
     useEffect(() => {
         const onKey = (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
@@ -424,6 +432,7 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
                 </button>
                 <button onClick={undo} disabled={!past.length} style={btn('#fff', '#4a3f35', { opacity: past.length ? 1 : 0.4 })}>↶ בטל</button>
                 <button onClick={redo} disabled={!future.length} style={btn('#fff', '#4a3f35', { opacity: future.length ? 1 : 0.4 })}>↷ בצע שוב</button>
+                <button onClick={resetAll} disabled={!dirty} style={btn('#fff', '#8a3a2c', { opacity: dirty ? 1 : 0.4, borderColor: '#e6cfc8' })}>↺ בטל הכל</button>
                 <button onClick={reDetect} style={btn('#fff', '#4a3f35')}>זיהוי הפרות מחודש</button>
                 <button onClick={cancel} style={btn('#fff', '#8a7a6e')}>ביטול</button>
                 <button onClick={finish} disabled={blocking || saving}
