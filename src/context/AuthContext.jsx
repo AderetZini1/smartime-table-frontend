@@ -45,13 +45,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const goToLogin = () => {
-    // Clear the expired session and drop the user, so the app's normal
-    // auth routing shows the login screen — WITHOUT a full page reload,
-    // so the modal doesn't flash over a reloaded /login page.
-    setSessionExpired(false);
+    // Session expired → mark this as a RE-login (Login will send the user back
+    // to the page they were on) and do a clean full navigation to /login.
+    // A full load avoids the blank page the half-torn-down dashboard was left in.
+    localStorage.setItem('reloginPending', '1');
     localStorage.removeItem('token');
     localStorage.removeItem('token8001');
-    setUser(null);
+    window.location.assign('/login');
   };
 
   return (
