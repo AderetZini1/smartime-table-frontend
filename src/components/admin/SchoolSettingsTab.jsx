@@ -58,7 +58,7 @@ export default function SchoolSettingsTab({ title }) {
 // ════════════════════════════════════════════════════════════════════════════
 // מבנה יום
 // ════════════════════════════════════════════════════════════════════════════
-const DEFAULT_SETTINGS = { active_days: [1, 2, 3, 4, 5], start_time: '08:00', breaks: [], grade_end_times: {} };
+const DEFAULT_SETTINGS = { active_days: [1, 2, 3, 4, 5], start_time: '08:00', friday_end_time: '', breaks: [], grade_end_times: {} };
 
 function DayStructureSection() {
   const [settings, setSettings] = useState(null);
@@ -72,6 +72,7 @@ function DayStructureSection() {
       .then(r => setSettings({
         ...DEFAULT_SETTINGS, ...r.data,
         start_time: hhmm(r.data.start_time) || DEFAULT_SETTINGS.start_time,
+        friday_end_time: hhmm(r.data.friday_end_time) || '',
         grade_end_times: Object.fromEntries(Object.entries(r.data.grade_end_times || {}).map(([k, v]) => [k, hhmm(v)])),
         breaks: r.data.breaks || [],
       }))
@@ -132,6 +133,21 @@ function DayStructureSection() {
     return { text: lessons === 1 ? 'שיעור אחד ביום' : `${lessons} שיעורים ביום`, color: C.greenText };
   };
 
+  const fridayText = () => {
+    const end = settings.friday_end_time;
+    if (!(days || []).includes(6)) return { text: 'יום שישי לא פעיל', color: C.soft };
+    if (!end) return { text: 'לא הוגדר', color: C.soft };
+    if (!settings.start_time || end <= settings.start_time) return { text: 'מוקדם מההתחלה', color: C.warmText };
+    const n = lessonsBetween(settings, end);
+    return { text: n === 0 ? 'אין מקום לשיעור' : (n === 1 ? 'שיעור אחד ביום שישי' : `${n} שיעורים ביום שישי`), color: C.greenText };
+  };
+  const weekdayRangeLabel = (activeDays) => {
+    const wd = (activeDays || []).filter(d => d !== 6).sort((a, b) => a - b);
+    if (wd.length === 0) return 'ימים א׳–ה׳';
+    const contiguous = wd.every((d, i) => i === 0 || d === wd[i - 1] + 1);
+    return contiguous ? `ימים ${DAYS[wd[0]]}–${DAYS[wd[wd.length - 1]]}` : `ימים ${wd.map(d => DAYS[d]).join(', ')}`;
+  };
+
   const section = { display: 'flex', flexDirection: 'column', gap: '10px', paddingTop: '18px', borderTop: `1px solid ${C.lineSoft}` };
 
   // actual clock times of each break, and the grades whose day ends before it
@@ -161,13 +177,20 @@ function DayStructureSection() {
           </div>
         </div>
 
-        <div style={section}>
-          <Label htmlFor="start-time">שעת התחלה</Label>
-          <input id="start-time" type="time" value={settings.start_time || ''} onChange={e => update({ start_time: e.target.value })} style={{ ...timeStyle, alignSelf: 'flex-start' }} />
+        <div style={{ ...section, flexDirection: 'row', gap: '32px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <Label htmlFor="start-time">שעת התחלה</Label>
+            <input id="start-time" type="time" value={settings.start_time || ''} onChange={e => update({ start_time: e.target.value })} style={{ ...timeStyle, alignSelf: 'flex-start' }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <Label htmlFor="friday-end">שעת סיום ביום שישי</Label>
+            <input id="friday-end" type="time" value={settings.friday_end_time || ''} onChange={e => update({ friday_end_time: e.target.value })} style={{ ...timeStyle, alignSelf: 'flex-start' }} />
+            <span style={{ fontSize: '12px', color: fridayText().color, whiteSpace: 'nowrap' }}>{fridayText().text}</span>
+          </div>
         </div>
 
         <div style={section}>
-          <Label>שעת סיום לפי שכבה</Label>
+          <Label>שעת סיום לפי שכבה · {weekdayRangeLabel(days)}</Label>
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${GRADES.length}, minmax(0, 1fr))`, gap: '8px' }}>
             {GRADES.map(g => {
               const res = lessonsText(g);
@@ -1305,6 +1328,20 @@ function computeDay(settings, grade) {
     }
   }
   return { segments, lessons: n, endsAt: toHHMM(t) };
+}
+
+function lessonsBetween(settings, endStr) {
+  const start = toMin(settings?.start_time);
+  const end = toMin(endStr);
+  if (start == null || end == null || end <= start) return 0;
+  const breaks = [...(settings.breaks || [])].sort((a, b) => a.after_lesson - b.after_lesson);
+  let t = start, n = 0;
+  while (t + LESSON_MINUTES <= end) {
+    n += 1; t += LESSON_MINUTES;
+    const br = breaks.find(b => b.after_lesson === n);
+    if (br && t + br.duration_minutes + LESSON_MINUTES <= end) t += br.duration_minutes;
+  }
+  return n;
 }
 
 // ─── save tracking ──────────────────────────────────────────────────────────
