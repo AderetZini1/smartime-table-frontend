@@ -13,9 +13,18 @@ export default function Login() {
   const { loginUser } = useAuth();
   const navigate = useNavigate();
 
+  // Fresh login → land on the default page (clear the remembered admin tab).
+  // Re-login after a session expiry → keep it, so the user returns where they were.
+  const applyPostLoginTab = () => {
+    const wasRelogin = localStorage.getItem('reloginPending') === '1';
+    localStorage.removeItem('reloginPending');
+    if (!wasRelogin) localStorage.removeItem('adminActiveTab');
+  };
+  
   const handleAfterLogin = (token, userData) => {
     localStorage.setItem('token', token);
     loginUser(token, userData);
+    applyPostLoginTab();
     if (userData.is_admin) {
       navigate('/admin');
     } else {
@@ -41,6 +50,7 @@ export default function Login() {
         console.warn('8001 login failed (generation/schedule may be unavailable)', e);
       }
 
+      applyPostLoginTab();
       if (meRes.data.is_admin) {
         navigate('/admin');
       } else {
