@@ -596,15 +596,30 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
             {occMenu && d && (
                 <div onClick={() => { setOccMenu(null); setAltsFor(null); }} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
                     <div onClick={e => e.stopPropagation()} dir="rtl" style={{ backgroundColor: '#FAF7F2', border: '1px solid #e2dacc', borderRadius: '14px', padding: '22px', width: '92%', maxWidth: '470px', maxHeight: '82vh', overflowY: 'auto', boxShadow: '0 10px 30px rgba(0,0,0,0.15)' }}>
-                        <h3 style={{ margin: '0 0 8px', fontSize: '16px', color: '#4a3f35' }}>המעבר יוצר התנגשות</h3>
-                        <div style={{ fontSize: '13px', color: '#8a3a2c', marginBottom: '14px' }}>
-                            העברת <b>{d.src.subject_name}</b> ל{slotLabel({ day_of_week: occMenu.day, hour_of_day: occMenu.hour })}:
-                            <ul style={{ margin: '8px 0 0', paddingRight: '18px', lineHeight: 1.7 }}>
-                                {d.sameCls.map(o => <li key={`c${o.id}`}>התא תפוס ע״י {o.subject_name} ({o.teacher_first_name} {o.teacher_last_name})</li>)}
-                                {d.teacherBusy.filter(o => !d.sameCls.includes(o)).map(o => <li key={`t${o.id}`}>{o.teacher_first_name} {o.teacher_last_name} כבר מלמד/ת {o.subject_name} של {o.group_name} בשעה זו</li>)}
-                                {d.roomBusy.filter(o => !d.sameCls.includes(o) && !d.teacherBusy.includes(o)).map(o => <li key={`r${o.id}`}>{o.room_name} תפוס ע״י {o.subject_name} של {o.group_name}</li>)}
-                            </ul>
-                        </div>
+                        {(() => {
+                            const cleanSwap = d.occ && !d.swapCreates;
+                            return (
+                                <>
+                                    <h3 style={{ margin: '0 0 8px', fontSize: '16px', color: '#4a3f35' }}>
+                                        {cleanSwap ? 'התא ביעד תפוס' : 'המעבר יוצר התנגשות'}
+                                    </h3>
+                                    <div style={{ fontSize: '13px', color: cleanSwap ? '#8a7a6e' : '#8a3a2c', marginBottom: '14px' }}>
+                                        {cleanSwap ? (
+                                            <>התא ביעד תפוס ע״י <b>{d.occ.subject_name}</b>. החלפה בין השיעורים לא תיצור התנגשות.</>
+                                        ) : (
+                                            <>
+                                                העברת <b>{d.src.subject_name}</b> ל{slotLabel({ day_of_week: occMenu.day, hour_of_day: occMenu.hour })}:
+                                                <ul style={{ margin: '8px 0 0', paddingRight: '18px', lineHeight: 1.7 }}>
+                                                    {d.sameCls.map(o => <li key={`c${o.id}`}>התא תפוס ע״י {o.subject_name} ({o.teacher_first_name} {o.teacher_last_name})</li>)}
+                                                    {d.teacherBusy.filter(o => !d.sameCls.includes(o)).map(o => <li key={`t${o.id}`}>{o.teacher_first_name} {o.teacher_last_name} כבר מלמד/ת {o.subject_name} של {o.group_name} בשעה זו</li>)}
+                                                    {d.roomBusy.filter(o => !d.sameCls.includes(o) && !d.teacherBusy.includes(o)).map(o => <li key={`r${o.id}`}>{o.room_name} תפוס ע״י {o.subject_name} של {o.group_name}</li>)}
+                                                </ul>
+                                            </>
+                                        )}
+                                    </div>
+                                </>
+                            );
+                        })()}
 
                         {altsFor === null && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
