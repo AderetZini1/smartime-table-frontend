@@ -448,7 +448,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                 {moreMenuOpen && (
                     <>
                         <div onClick={() => setMoreMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 900 }} />
-                        <div dir="rtl" style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 901, backgroundColor: '#fff', border: '1px solid #e2dacc', borderRadius: '12px', boxShadow: '0 8px 24px rgba(74,63,53,0.14)', width: '230px', padding: '8px' }}>
+                        <div dir="rtl" style={{ position: 'absolute', top: '0', right: 'calc(100% + 10px)', zIndex: 901, backgroundColor: '#fff', border: '1px solid #e2dacc', borderRadius: '12px', boxShadow: '0 8px 24px rgba(74,63,53,0.14)', width: '230px', padding: '8px' }}>
                             <button onClick={() => { setMoreMenuOpen(false); openViolations(); }} disabled={!runInfo} style={menuItemStyle(false)}>
                                 <i className="ti ti-alert-triangle" aria-hidden="true"></i>
                                 <span>צפה בהפרות</span>
