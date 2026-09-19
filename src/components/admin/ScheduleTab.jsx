@@ -82,8 +82,10 @@ function hashString(str) {
     return hash;
 }
 
-function colorForEntry(entry) {
-    const key = entry.subject_id != null ? String(entry.subject_id) : (entry.subject_name || '');
+function colorForEntry(entry, mode = 'subject') {
+    const key = mode === 'teacher'
+        ? (entry.teacher_id != null ? `t${entry.teacher_id}` : `${entry.teacher_first_name || ''}${entry.teacher_last_name || ''}`)
+        : (entry.subject_id != null ? String(entry.subject_id) : (entry.subject_name || ''));
     const idx = hashString(key) % SUBJECT_COLOR_PALETTE.length;
     return SUBJECT_COLOR_PALETTE[idx];
 }
@@ -152,6 +154,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
     const [confirmGenerateType, setConfirmGenerateType] = useState(null);
     const [breaks, setBreaks] = useState([]);
     const [editMode, setEditMode] = useState(false);
+    const [colorMode, setColorMode] = useState('subject'); // 'subject' | 'teacher'
 
     // Export: single button, two stages — pick a format first, then pick a target.
     const [exportOpen, setExportOpen] = useState(false);
@@ -438,6 +441,9 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                 <button onClick={() => setEditMode(true)} disabled={!runInfo} style={{ ...styles.btnOutline, padding: '13px 24px', fontSize: '16px', opacity: !runInfo ? 0.5 : 1, cursor: !runInfo ? 'not-allowed' : 'pointer' }}>
                     <i className="ti ti-edit" aria-hidden="true"></i> עריכת מערכת ידנית
                 </button>
+                <button onClick={() => setColorMode(m => m === 'subject' ? 'teacher' : 'subject')} style={{ ...styles.btnOutline, padding: '13px 22px', fontSize: '15px' }}>
+                    <i className="ti ti-palette" aria-hidden="true"></i> צבעים: {colorMode === 'subject' ? 'לפי מקצוע' : 'לפי מורה'}
+                </button>
                 <div style={{ position: 'relative' }}>
                 <button
                     onClick={() => { if (moreMenuOpen) { setMoreMenuOpen(false); } else { setMoreMenuOpen(true); } }}
@@ -687,7 +693,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                                                                             {lessons.length === 0 ? (
                                                                                 <div style={gridStyles.freeCell}>פנוי</div>
                                                                             ) : lessons.map((e, idx) => {
-                                                                                const color = colorForEntry(e);
+                                                                                const color = colorForEntry(e, colorMode);
                                                                                 return (
                                                                                     <div key={idx} className="lesson-box" style={{ ...gridStyles.lessonBox, backgroundColor: color.bg, borderRight: `3px solid ${color.accent}` }}>
                                                                                         <div style={{ fontWeight: 700 }}>{e.subject_name}</div>
