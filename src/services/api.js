@@ -27,9 +27,11 @@ let sessionExpiredFired = false;
 
 export const resetSessionExpiredFlag = () => { sessionExpiredFired = false; };
 
-const handle401 = (error) => {
+const makeHandle401 = (tokenKey) => (error) => {
   const status = error?.response?.status;
-  const hadToken = localStorage.getItem('token');
+  // Only fire "session expired" if THIS backend actually had a token — a 401
+  // from 8001 while the 8000 token is valid (or vice versa) no longer triggers it.
+  const hadToken = localStorage.getItem(tokenKey);
   if (status === 401 && (hadToken || sessionExpiredFired)) {
     if (!sessionExpiredFired) {
       sessionExpiredFired = true;
@@ -37,13 +39,12 @@ const handle401 = (error) => {
       localStorage.removeItem('token8001');
       window.dispatchEvent(new Event('session-expired'));
     }
-    // Swallow quietly so the modal handles re-login, no red 401 overlay.
     return new Promise(() => { });
   }
   return Promise.reject(error);
 };
 
-api.interceptors.response.use((response) => response, handle401);
+api.interceptors.response.use((response) => response, makeHandle401('token'));
 
 // Auth
 export const login = (username, password) => {
@@ -143,7 +144,7 @@ api2.interceptors.request.use((config) => {
   return config;
 });
 
-api2.interceptors.response.use((response) => response, handle401);
+api2.interceptors.response.use((response) => response, makeHandle401('token8001'));
 
 // Silent login to 8001 (same ID + password as 8000). Stores its token.
 export const login8001 = (username, password) =>
