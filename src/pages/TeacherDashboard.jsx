@@ -202,6 +202,7 @@ export default function TeacherDashboard() {
   const [aiPreview, setAiPreview] = useState(null);
 
   const [submissionStatus, setSubmissionStatus] = useState(null);
+  const [schedColorMode, setSchedColorMode] = useState('subject'); // 'subject' | 'group'
   const [submitting, setSubmitting] = useState(false);
 
   const [myEntries, setMyEntries] = useState([]);
@@ -495,6 +496,21 @@ export default function TeacherDashboard() {
     finally {
       setSubmitting(false);
     }
+  };
+
+
+  const SCHED_PALETTE = [
+    { bg: '#CDE7D8', accent: '#4f9c73' }, { bg: '#D6E4F5', accent: '#4f7fc2' },
+    { bg: '#F6DCC9', accent: '#c98a4b' }, { bg: '#E7D8F2', accent: '#9068b8' },
+    { bg: '#F5D8DF', accent: '#c25c7c' }, { bg: '#D9EDEA', accent: '#3f9e8f' },
+    { bg: '#F2E6C9', accent: '#b3922e' }, { bg: '#DADEF2', accent: '#5f68c2' },
+  ];
+  const schedHash = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h; };
+  const schedColorFor = (e) => {
+    const key = schedColorMode === 'group'
+      ? (e.group_id != null ? `g${e.group_id}` : (e.group_name || ''))
+      : (e.subject_id != null ? String(e.subject_id) : (e.subject_name || ''));
+    return SCHED_PALETTE[schedHash(key) % SCHED_PALETTE.length];
   };
 
   const scheduleCell = (day, hour) => myEntries.filter(e => e.day_of_week === day && e.hour_of_day === hour);
@@ -1097,11 +1113,16 @@ export default function TeacherDashboard() {
                   </div>
                 ) : (
                   <div style={{ overflowX: 'auto' }}>
-                    {myRun?.published_at && (
-                      <div style={{ textAlign: 'left', fontSize: '13px', color: '#8a7a6e', marginBottom: '11px' }}>
-                        פורסם ב-{fmtDate(myRun.published_at)}
-                      </div>
-                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '11px', gap: '10px' }}>
+                      <button onClick={() => setSchedColorMode(m => m === 'subject' ? 'group' : 'subject')} style={{ background: '#fff', border: '1px solid #e2dacc', borderRadius: '8px', padding: '7px 14px', fontSize: '13px', color: '#4a3f35', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif' }}>
+                        צבעים: {schedColorMode === 'subject' ? 'לפי מקצוע' : 'לפי כיתה'}
+                      </button>
+                      {myRun?.published_at && (
+                        <div style={{ textAlign: 'left', fontSize: '13px', color: '#8a7a6e' }}>
+                          פורסם ב-{fmtDate(myRun.published_at)}
+                        </div>
+                      )}
+                    </div>
                     <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                       <thead>
                         <tr>
@@ -1122,7 +1143,7 @@ export default function TeacherDashboard() {
                               return (
                                 <td key={day} style={styles.gridCell}>
                                   {lessons.map((e, idx) => (
-                                    <div key={idx} style={styles.lessonBox}>
+                                    <div key={idx} style={{ ...styles.lessonBox, backgroundColor: schedColorFor(e).bg, borderRight: `3px solid ${schedColorFor(e).accent}` }}>
                                       <div style={{ fontWeight: 600 }}>{e.subject_name}</div>
                                       <div style={{ color: '#8a7a6e' }}>{e.group_name}</div>
                                       {e.room_name && <div style={{ color: '#a99', fontSize: '11px' }}>{e.room_name}</div>}
