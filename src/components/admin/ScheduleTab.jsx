@@ -438,6 +438,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                 <button onClick={() => setEditMode(true)} disabled={!runInfo} style={{ ...styles.btnOutline, padding: '13px 24px', fontSize: '16px', opacity: !runInfo ? 0.5 : 1, cursor: !runInfo ? 'not-allowed' : 'pointer' }}>
                     <i className="ti ti-edit" aria-hidden="true"></i> עריכת מערכת ידנית
                 </button>
+                <div style={{ position: 'relative' }}>
                 <button
                     onClick={() => { if (moreMenuOpen) { setMoreMenuOpen(false); } else { setMoreMenuOpen(true); } }}
                     style={{ ...styles.btnOutline, padding: '13px 22px', fontSize: '15px' }}
@@ -460,6 +461,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                         </div>
                     </>
                 )}
+                </div>
             </div>
 
             {!runInfo ? (
