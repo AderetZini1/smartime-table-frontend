@@ -163,9 +163,10 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
     const undo = () => { if (!past.length) return; setFuture(f => [entries, ...f]); setEntries(past[past.length - 1]); setPast(past.slice(0, -1)); };
     const redo = () => { if (!future.length) return; setPast(p => [...p, entries]); setEntries(future[0]); setFuture(future.slice(1)); };
 
-    const resetAll = () => {
-        if (!dirty) return;
-        if (!window.confirm('לבטל את כל השינויים ולחזור למערכת המקורית?')) return;
+    const [confirmReset, setConfirmReset] = useState(false);
+    const resetAll = () => { if (dirty) setConfirmReset(true); };
+    const doResetAll = () => {
+        setConfirmReset(false);
         setPast([]); setFuture([]);
         setEntries(initialEntries.map(e => ({ ...e })));
         try { localStorage.removeItem(draftKey); } catch { /* */ }
@@ -630,6 +631,8 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
                             );
                         })()}
 
+                        
+
                         {altsFor === null && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 {d.occ && <button onClick={doSwap} style={btn(d.swapCreates ? '#fff' : '#EDF4E8', d.swapCreates ? '#a08c30' : '#4a7c3f', { textAlign: 'right' })}>החלפה — {d.src.subject_name} ↔ {d.occ.subject_name}{d.swapCreates ? ' (תיווצר התנגשות)' : ' (ללא התנגשות)'}</button>}
@@ -665,6 +668,21 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
                     </div>
                 </div>
             )}
+            
+
+            {confirmReset && (
+                <div dir="rtl" onClick={() => setConfirmReset(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(74,63,53,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }}>
+                    <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '16px', border: '1px solid #e2dacc', padding: '26px 28px', maxWidth: '380px', width: '90%', boxShadow: '0 12px 40px rgba(74,63,53,0.18)', fontFamily: 'Varela Round, sans-serif' }}>
+                        <h3 style={{ margin: '0 0 10px', fontSize: '17px', color: '#4a3f35' }}>ביטול כל השינויים</h3>
+                        <p style={{ margin: '0 0 22px', fontSize: '14px', color: '#8a7a6e', lineHeight: 1.6 }}>הפעולה תמחק את כל השינויים שביצעת ותחזיר את המערכת למצב המקורי. לא ניתן לשחזר.</p>
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-start' }}>
+                            <button onClick={doResetAll} style={{ background: '#c0553f', color: '#fff', border: 'none', borderRadius: '9px', padding: '10px 20px', fontSize: '14px', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif' }}>בטל הכל</button>
+                            <button onClick={() => setConfirmReset(false)} style={{ background: '#fff', color: '#8a7a6e', border: '1px solid #e2dacc', borderRadius: '9px', padding: '10px 20px', fontSize: '14px', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif' }}>חזרה</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
 
             {/* improvement suggestions */}
             {showSuggest && (
