@@ -635,7 +635,7 @@ export default function ScheduleEditor({ initialEntries, runId, onFinish, onCanc
                                 {d.occ && <button onClick={doSwap} style={btn(d.swapCreates ? '#fff' : '#EDF4E8', d.swapCreates ? '#a08c30' : '#4a7c3f', { textAlign: 'right' })}>החלפה — {d.src.subject_name} ↔ {d.occ.subject_name}{d.swapCreates ? ' (תיווצר התנגשות)' : ' (ללא התנגשות)'}</button>}
                                 <button onClick={() => setAltsFor('source')} style={btn('#fff', '#4a3f35', { textAlign: 'right' })}>הצעות חלופיות ל־{d.src.subject_name}</button>
                                 {d.occ && <button onClick={() => setAltsFor('occupant')} style={btn('#fff', '#4a3f35', { textAlign: 'right' })}>הצעות חלופיות ל־{d.occ.subject_name}</button>}
-                                <button onClick={doPlaceAnyway} style={btn('#fff', '#a08c30', { textAlign: 'right' })}>הצב בכל זאת{d.placeCreates ? ' (תיווצר התנגשות)' : ''}</button>
+                                {!(d.occ && !d.swapCreates) && <button onClick={doPlaceAnyway} style={btn('#fff', '#a08c30', { textAlign: 'right' })}>הצב בכל זאת{d.placeCreates ? ' (תיווצר התנגשות)' : ''}</button>}
                                 <button onClick={() => setOccMenu(null)} style={btn('#fff', '#8a7a6e', { textAlign: 'right' })}>ביטול</button>
                             </div>
                         )}
