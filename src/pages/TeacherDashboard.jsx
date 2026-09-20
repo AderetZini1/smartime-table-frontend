@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { updateTeacher, getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule, getMyPreferences, saveMyPreferences, getMyNotifications, markNotificationRead, parseConstraintsAI, getTimeslots, getMySubmissionStatus, submitMyPreferences } from '../services/api';
+import { updateTeacher, getMyConstraints, createConstraint, deleteConstraint, getActiveWindow, getMyRequests, createRequest, getSubjects, getMySubjects, addMySubject, removeMySubject, getStudentGroups, getMyGradeLevels, addMyGradeLevel, removeMyGradeLevel, getMyHomeroomPref, saveMyHomeroomPref, getMySchedule, getMyPreferences, saveMyPreferences, getMyNotifications, markNotificationRead, parseConstraintsAI, getTimeslots, getMySubmissionStatus, submitMyPreferences, getSchoolSettings } from '../services/api';
 import { exportSingleSchedule } from '../utils/exportSchedule';
 import { useNavigate } from 'react-router-dom';
 import { exportSinglePDF } from '../utils/exportSchedulePDF';
@@ -11,6 +11,15 @@ const GRADE_LABELS = { 1: "א'", 2: "ב'", 3: "ג'", 4: "ד'", 5: "ה'", 6: "ו'
 
 const DAY_NAMES_BY_NUM = { 1: 'ראשון', 2: 'שני', 3: 'שלישי', 4: 'רביעי', 5: 'חמישי', 6: 'שישי' };
 const DAY_ORDER = [1, 2, 3, 4, 5, 6];
+function periodsUntil(startStr, endStr, breaks) {
+  const toMin = s => { if (!s) return null; const p = String(s).split(':'); return (+p[0]) * 60 + (+p[1]); };
+  const start = toMin(startStr), end = toMin(endStr);
+  if (start == null || end == null || end <= start) return null;
+  const sorted = [...(breaks || [])].sort((a, b) => a.after_lesson - b.after_lesson);
+  let t = start, n = 0;
+  while (t + 45 <= end) { n += 1; t += 45; const br = sorted.find(b => b.after_lesson === n); if (br && t + br.duration_minutes + 45 <= end) t += br.duration_minutes; }
+  return n;
+}
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -207,6 +216,7 @@ export default function TeacherDashboard() {
 
   const [myEntries, setMyEntries] = useState([]);
   const [myRun, setMyRun] = useState(null);
+  const [schoolSettings, setSchoolSettings] = useState(null);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleError, setScheduleError] = useState('');
   const unreadCount = notifications.filter(n => !n.is_read).length;
@@ -224,19 +234,31 @@ export default function TeacherDashboard() {
   }, [timeslots]);
 
   const hoursByDay = useMemo(() => {
-    const map = {};
-    timeslots.forEach(t => {
-      if (!map[t.day_of_week]) map[t.day_of_week] = [];
-      map[t.day_of_week].push(t.hour_of_day);
-    });
-    Object.keys(map).forEach(d => map[d].sort((a, b) => a - b));
-    return map;
-  }, [timeslots]);
+    const s = schoolSettings;
+    const active = (s?.active_days) || [1, 2, 3, 4, 5, 6];
+    const perDay = {};
+    for (let day = 1; day <= 6; day++) {
+      if (!active.includes(day)) { perDay[day] = []; continue; }
+      let end;
+      if (day === 6) end = s?.friday_end_time;
+      else { const ends = Object.values(s?.grade_end_times || {}).filter(Boolean).sort(); end = ends[ends.length - 1]; }
+      const n = periodsUntil(s?.start_time, end, s?.breaks || []);
+      perDay[day] = n ? Array.from({ length: Math.min(n, 8) }, (_, i) => i + 1) : [];
+    }
+    // fall back to the timeslots table until settings load / if unset
+    if (!s || !Object.values(perDay).some(a => a.length)) {
+      const fromTs = {};
+      timeslots.forEach(t => { (fromTs[t.day_of_week] = fromTs[t.day_of_week] || []).push(t.hour_of_day); });
+      Object.keys(fromTs).forEach(d => fromTs[d].sort((a, b) => a - b));
+      return fromTs;
+    }
+    return perDay;
+  }, [schoolSettings, timeslots]);
 
   const maxHour = useMemo(() => {
-    if (!timeslots.length) return 8;
-    return Math.max(...timeslots.map(t => t.hour_of_day));
-  }, [timeslots]);
+    const all = Object.values(hoursByDay).flat();
+    return all.length ? Math.max(...all) : 8;
+  }, [hoursByDay]);
 
   const hoursRange = useMemo(() => Array.from({ length: maxHour }, (_, i) => i + 1), [maxHour]);
 
@@ -254,6 +276,7 @@ export default function TeacherDashboard() {
     getStudentGroups().then(r => setGroups(r.data)).catch(() => { });
     getMyNotifications().then(r => setNotifications(r.data)).catch(() => { });
     getTimeslots().then(r => setTimeslots(r.data)).catch(() => { });
+    getSchoolSettings().then(r => setSchoolSettings(r.data)).catch(() => { });
   }, []);
 
   useEffect(() => {
