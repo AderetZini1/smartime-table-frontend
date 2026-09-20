@@ -19,6 +19,15 @@ const VIEW_TYPES = [
 const DAY_NAMES_BY_NUM = { 1: 'ראשון', 2: 'שני', 3: 'שלישי', 4: 'רביעי', 5: 'חמישי', 6: 'שישי' };
 const DAY_ORDER = [1, 2, 3, 4, 5, 6];
 const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
+function periodsUntil(startStr, endStr, breaks) {
+    const toMin = s => { if (!s) return null; const p = String(s).split(':'); return (+p[0]) * 60 + (+p[1]); };
+    const start = toMin(startStr), end = toMin(endStr);
+    if (start == null || end == null || end <= start) return null;
+    const sorted = [...(breaks || [])].sort((a, b) => a.after_lesson - b.after_lesson);
+    let t = start, n = 0;
+    while (t + 45 <= end) { n += 1; t += 45; const br = sorted.find(b => b.after_lesson === n); if (br && t + br.duration_minutes + 45 <= end) t += br.duration_minutes; }
+    return n;
+}
 const DIM_LABEL = { class: 'כיתה', teacher: 'מורה', subject: 'מקצוע', grade: 'שכבה' };
 const ALGO_LABELS = { CSP: 'CSP', HILL_CLIMBING: 'טיפוס גבעות', GENETIC: 'גנטי', GENETIC_MEMETIC: 'גנטי משופר' };
 const VIOLATION_TYPE_LABELS = {
@@ -153,6 +162,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
     const [showPublishConfirm, setShowPublishConfirm] = useState(false);
     const [confirmGenerateType, setConfirmGenerateType] = useState(null);
     const [breaks, setBreaks] = useState([]);
+    const [schoolSettings, setSchoolSettings] = useState(null);
     const [editMode, setEditMode] = useState(false);
     const [colorMode, setColorMode] = useState('subject'); // 'subject' | 'teacher'
 
@@ -166,7 +176,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
 
     useEffect(() => {
         loadSchedule();
-        getSchoolSettings().then(r => setBreaks(r.data.breaks || [])).catch(() => { });
+        getSchoolSettings().then(r => { setBreaks(r.data.breaks || []); setSchoolSettings(r.data); }).catch(() => { });
     }, []);
 
     useEffect(() => {
@@ -656,6 +666,16 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                         selectedValues.map(val => {
                             const valEntries = entriesFor(val);
                             const cellFor = (day, hour) => valEntries.filter(e => e.day_of_week === day && e.hour_of_day === hour);
+                            const activeDays = (schoolSettings?.active_days) || [1, 2, 3, 4, 5, 6];
+                            const maxPeriodForDay = (day) => {
+                                if (!schoolSettings) return 8;
+                                let end;
+                                if (day === 6) end = schoolSettings.friday_end_time;
+                                else { const ends = Object.values(schoolSettings.grade_end_times || {}).filter(Boolean).sort(); end = ends[ends.length - 1]; }
+                                const n = periodsUntil(schoolSettings.start_time, end, schoolSettings.breaks || []);
+                                return n ? Math.min(n, 8) : 8;
+                            };
+                            const naCell = (day, hour) => !activeDays.includes(day) || hour > maxPeriodForDay(day);
                             return (
                                 <div key={val} style={{ ...styles.card, boxShadow: '0 1px 3px rgba(74,63,53,0.06)' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
@@ -684,7 +704,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                                                             <tr>
                                                                 <td style={gridStyles.gridHourCell}>שיעור {hour}</td>
                                                                 {DAY_ORDER.map(day => {
-                                                                    if (day === 6 && hour > 4) {
+                                                                    if (naCell(day, hour)) {
                                                                         return <td key={day} style={{ ...gridStyles.gridCell, ...gridStyles.naCell }}></td>;
                                                                     }
                                                                     const lessons = cellFor(day, hour);
