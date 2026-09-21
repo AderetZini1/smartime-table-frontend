@@ -233,7 +233,7 @@ function TeacherPrefsDetail({ teacher, subjects, onBack, onViewSchedule }) {
           </div>
           <div style={{ minWidth: 0, textAlign: 'right' }}>
             <div style={{ fontSize: '17px', color: '#4a3f35', fontWeight: 700 }}>{fullName(teacher)}</div>
-            <div style={{ fontSize: '12px', color: '#8a7a6e' }}>{teacher.email} · מכסה: {teacher.weekly_hours_quota ?? '—'} שעות</div>
+            <div style={{ fontSize: '12px', color: '#8a7a6e' }}>{teacher.email}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: 'auto', flexShrink: 0 }}>
             <button onClick={() => setConfirmSchedule(true)} style={iconButton}>
