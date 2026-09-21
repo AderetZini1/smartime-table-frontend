@@ -32,7 +32,7 @@ export default function TeachersTab({ title }) {
           <span>{fullName(teacher)}</span>
         </>,
         <span style={{ color: '#8a7a6e' }}>{teacher.email}</span>,
-        teacher.weekly_hours_quota ?? '—',
+        (teacher.min_hours != null || teacher.max_hours != null) ? `${teacher.min_hours ?? '?'}–${teacher.max_hours ?? '?'}` : '—',
         <span style={{ ...styles.badge, ...(teacher.is_admin ? { backgroundColor: '#E8F2FA', color: '#5a8ac0' } : {}) }}>
           {teacher.is_admin ? 'מנהל' : 'מורה'}
         </span>,
