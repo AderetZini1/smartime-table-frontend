@@ -20,12 +20,18 @@ const makeSchema = (isEdit) => yup.object({
     .matches(/^05[0-9]{8}$/, 'מספר טלפון לא תקין')
     .nullable()
     .transform(v => v === '' ? null : v),
-  weekly_hours_quota: yup
-    .number()
-    .typeError('יש להזין מספר')
-    .required('מכסת שעות היא שדה חובה')
-    .min(1, 'מינימום שעה אחת')
-    .max(40, 'מקסימום 40 שעות'),
+  min_hours: yup
+    .number().typeError('יש להזין מספר')
+    .required('מינימום שעות הוא שדה חובה')
+    .min(1, 'מינימום שעה אחת').max(40, 'מקסימום 40 שעות'),
+  max_hours: yup
+    .number().typeError('יש להזין מספר')
+    .required('מקסימום שעות הוא שדה חובה')
+    .min(1, 'מינימום שעה אחת').max(40, 'מקסימום 40 שעות')
+    .test('gte-min', 'המקסימום חייב להיות ≥ המינימום', function (v) {
+      const { min_hours } = this.parent;
+      return v == null || min_hours == null || v >= min_hours;
+    }),
   password: isEdit
     ? yup.string().transform(v => v === '' ? undefined : v).min(6, 'סיסמה חייבת להכיל לפחות 6 תווים').notRequired()
     : yup.string().required('סיסמה היא שדה חובה').min(6, 'סיסמה חייבת להכיל לפחות 6 תווים'),
@@ -44,7 +50,8 @@ export default function AddTeacherModal({ onClose, onAdded, onUpdated, teacher }
           teacher_identity: teacher.teacher_identity || '',
           email: teacher.email || '',
           phone_number: teacher.phone_number || '',
-          weekly_hours_quota: teacher.weekly_hours_quota ?? '',
+          min_hours: teacher.min_hours ?? '',
+          max_hours: teacher.max_hours ?? '',
           teacher_color: teacher.teacher_color || '#8a9e78',
           password: '',
         }
@@ -61,7 +68,8 @@ export default function AddTeacherModal({ onClose, onAdded, onUpdated, teacher }
           last_name: data.last_name,
           email: data.email,
           phone_number: data.phone_number || null,
-          weekly_hours_quota: data.weekly_hours_quota,
+          min_hours: data.min_hours,
+          max_hours: data.max_hours,
           teacher_color: data.teacher_color,
         };
         if (data.password) payload.password = data.password;
@@ -144,9 +152,12 @@ export default function AddTeacherModal({ onClose, onAdded, onUpdated, teacher }
               {errors.phone_number && <p style={errorStyle}>{errors.phone_number.message}</p>}
             </div>
             <div>
-              <label style={labelStyle}>מכסת שעות שבועית * <span style={{ color: '#c8baa6', fontSize: '11px' }}>(1-40)</span></label>
-              <input {...register('weekly_hours_quota')} type="number" style={inputStyle(errors.weekly_hours_quota)} placeholder="22" min="1" max="40" />
-              {errors.weekly_hours_quota && <p style={errorStyle}>{errors.weekly_hours_quota.message}</p>}
+              <label style={labelStyle}>שעות משרה שבועיות * <span style={{ color: '#c8baa6', fontSize: '11px' }}>(מינ׳–מקס׳)</span></label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input {...register('min_hours')} type="number" style={inputStyle(errors.min_hours)} placeholder="מינ׳" min="1" max="40" />
+                <input {...register('max_hours')} type="number" style={inputStyle(errors.max_hours)} placeholder="מקס׳" min="1" max="40" />
+              </div>
+              {(errors.min_hours || errors.max_hours) && <p style={errorStyle}>{(errors.min_hours || errors.max_hours).message}</p>}
             </div>
           </div>
 
