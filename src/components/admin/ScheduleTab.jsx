@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import {
     runGeneration, runMemeticGeneration, getGenerationStatus, getCurrentSchedule,
     publishSchedule, getViolations, getSchoolSettings,
@@ -19,6 +19,10 @@ const VIEW_TYPES = [
 const DAY_NAMES_BY_NUM = { 1: 'ראשון', 2: 'שני', 3: 'שלישי', 4: 'רביעי', 5: 'חמישי', 6: 'שישי' };
 const DAY_ORDER = [1, 2, 3, 4, 5, 6];
 const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
+
+const ACTIVE_JOB_KEY = 'activeGenJob';
+const VIEW_STATE_KEY = 'scheduleViewState';
+
 function periodsUntil(startStr, endStr, breaks) {
     const toMin = s => { if (!s) return null; const p = String(s).split(':'); return (+p[0]) * 60 + (+p[1]); };
     const start = toMin(startStr), end = toMin(endStr);
@@ -28,8 +32,19 @@ function periodsUntil(startStr, endStr, breaks) {
     while (t + 45 <= end) { n += 1; t += 45; const br = sorted.find(b => b.after_lesson === n); if (br && t + br.duration_minutes + 45 <= end) t += br.duration_minutes; }
     return n;
 }
+
 const DIM_LABEL = { class: 'כיתה', teacher: 'מורה', subject: 'מקצוע', grade: 'שכבה' };
 const ALGO_LABELS = { CSP: 'CSP', HILL_CLIMBING: 'טיפוס גבעות', GENETIC: 'גנטי', GENETIC_MEMETIC: 'גנטי משופר' };
+
+// בתצוגת מורה כל השיעורים שייכים לאותו מורה, ובתצוגת מקצוע כולם מאותו מקצוע —
+// ולכן צביעה לפי אותו ממד תיתן לוח בצבע אחד. בתצוגות האלה נכפה את הצביעה
+// המועילה ולא נציג את הפקד בכלל.
+const FORCED_COLOR_MODE = { teacher: 'subject', subject: 'teacher' };
+const COLOR_MODES = [
+    { id: 'subject', label: 'לפי מקצוע' },
+    { id: 'teacher', label: 'לפי מורה' },
+];
+
 const VIOLATION_TYPE_LABELS = {
     // מבנה יום ושכבה
     student_gap: 'חלונות ריקים באמצע יום הכיתה',
@@ -65,6 +80,15 @@ const extractGrade = (groupName) => {
     if (match) return match[1];
     const fallback = groupName.match(/[א-ת]/);
     return fallback ? fallback[0] : 'אחר';
+};
+
+// המפתח שלפיו שיעור משויך לערך בתצוגה הנוכחית (כיתה / מורה / מקצוע / שכבה).
+const dimKeyOf = (entry, dim) => {
+    if (dim === 'class') return entry.group_name;
+    if (dim === 'teacher') return `${entry.teacher_first_name} ${entry.teacher_last_name}`;
+    if (dim === 'subject') return entry.subject_name;
+    if (dim === 'grade') return extractGrade(entry.group_name);
+    return null;
 };
 
 // Curated pastel palette (replaces the earlier ad-hoc colors). Each subject
@@ -116,6 +140,15 @@ const menuItemStyle = (emphasis) => ({
     marginBottom: '2px',
 });
 
+// פילים קטנות בסגנון בורר התצוגה שמעליהן, כדי ששתי האפשרויות יהיו גלויות
+// ולא יצטרכו ניחוש של "מה יקרה אם אלחץ".
+const colorPillStyle = (active) => ({
+    width: 'fit-content', padding: '8px 16px', borderRadius: '9px', fontSize: '14px',
+    border: 'none', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif',
+    backgroundColor: active ? '#8a9e78' : 'transparent',
+    color: active ? '#fff' : '#8a7a6e',
+});
+
 function todayAppDay() {
     const jsDay = new Date().getDay();
     return jsDay === 6 ? null : jsDay + 1;
@@ -125,27 +158,17 @@ function todayAppDay() {
 // so the area never looks like a blank hole in the page.
 const SKELETON_ROWS = [1, 2, 3, 4, 5, 6, 7, 8];
 
+const EMPTY_LESSONS = [];
+
+const readViewState = () => {
+    try { return JSON.parse(localStorage.getItem(VIEW_STATE_KEY)) || {}; }
+    catch (e) { return {}; }
+};
+
 export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHistory }) {
     const [entries, setEntries] = useState([]);
     const [runInfo, setRunInfo] = useState(null);
     const [generating, setGenerating] = useState(false);
-    
-    // Resume tracking a run that is still in progress after leaving/returning to the tab
-    useEffect(() => {
-        const savedJob = localStorage.getItem('activeGenJob');
-        if (!savedJob) return;
-        setGenerating(true);
-        const poll = async () => {
-            try {
-                const s = await getGenerationStatus(savedJob);
-                if (s.data.status === 'completed') { setGenerating(false); localStorage.removeItem('activeGenJob'); await loadSchedule(); }
-                else if (s.data.status === 'failed') { setGenerating(false); localStorage.removeItem('activeGenJob'); setGenError('יצירת המערכת נכשלה. נסי שוב.'); }
-                else setTimeout(poll, 3000);
-            } catch (e) { setGenerating(false); localStorage.removeItem('activeGenJob'); }
-        };
-        setTimeout(poll, 1500);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
     const [publishing, setPublishing] = useState(false);
     const [genError, setGenError] = useState('');
     const [publishMsg, setPublishMsg] = useState('');
@@ -154,17 +177,18 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
     const [showViolations, setShowViolations] = useState(false);
     const [violationSearch, setViolationSearch] = useState('');
     const [openViolationGroups, setOpenViolationGroups] = useState({});
-    const [filterType, setFilterType] = useState(null);
-    const [selectedValues, setSelectedValues] = useState([]);
     const [comboOpen, setComboOpen] = useState(false);
     const [comboInput, setComboInput] = useState('');
-    const [moreMenuOpen, setMoreMenuOpen] = useState(false);
     const [showPublishConfirm, setShowPublishConfirm] = useState(false);
     const [confirmGenerateType, setConfirmGenerateType] = useState(null);
-    const [breaks, setBreaks] = useState([]);
     const [schoolSettings, setSchoolSettings] = useState(null);
     const [editMode, setEditMode] = useState(false);
-    const [colorMode, setColorMode] = useState('subject'); // 'subject' | 'teacher'
+
+    // מצב התצוגה נשמר מקומית, כך שמעבר בין טאבים או רענון של הדף מחזירים
+    // את המשתמש/ת בדיוק למה שהיה פתוח.
+    const [filterType, setFilterType] = useState(() => readViewState().filterType || null);
+    const [selectedValues, setSelectedValues] = useState(() => readViewState().selectedValues || []);
+    const [colorMode, setColorMode] = useState(() => readViewState().colorMode || 'subject');
 
     // Export: single button, two stages — pick a format first, then pick a target.
     const [exportOpen, setExportOpen] = useState(false);
@@ -174,10 +198,51 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
     const [exportSearch, setExportSearch] = useState('');
     const [exportMsg, setExportMsg] = useState('');
 
+    const pollTimer = useRef(null);
+
+    const stopPolling = () => {
+        if (pollTimer.current) { clearTimeout(pollTimer.current); pollTimer.current = null; }
+    };
+
+    const finishJob = () => {
+        stopPolling();
+        setGenerating(false);
+        localStorage.removeItem(ACTIVE_JOB_KEY);
+    };
+
+    // מעקב אחיד אחרי כל ריצת יצירה — רגילה, משופרת, או כזו שהתחילה לפני
+    // שעזבו את הטאב. קודם היו שלושה מימושים כמעט זהים, ורק אחד מהם שמר את
+    // מזהה הריצה, כך שריצה משופרת "נעלמה" ביציאה מהטאב.
+    const trackJob = (jobId, { delay = 3000, failMsg = 'יצירת המערכת נכשלה. אפשר לנסות שוב.' } = {}) => {
+        if (!jobId) return;
+        localStorage.setItem(ACTIVE_JOB_KEY, jobId);
+        setGenerating(true);
+        const poll = async () => {
+            try {
+                const s = await getGenerationStatus(jobId);
+                if (s.data.status === 'completed') { finishJob(); await loadSchedule(); }
+                else if (s.data.status === 'failed') { finishJob(); setGenError(failMsg); }
+                else pollTimer.current = setTimeout(poll, 3000);
+            } catch (e) {
+                finishJob();
+                setGenError('שגיאה בבדיקת מצב היצירה');
+            }
+        };
+        pollTimer.current = setTimeout(poll, delay);
+    };
+
     useEffect(() => {
         loadSchedule();
-        getSchoolSettings().then(r => { setBreaks(r.data.breaks || []); setSchoolSettings(r.data); }).catch(() => { });
+        getSchoolSettings().then(r => setSchoolSettings(r.data)).catch(() => { });
+        const savedJob = localStorage.getItem(ACTIVE_JOB_KEY);
+        if (savedJob) trackJob(savedJob, { delay: 1500 });
+        return stopPolling;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    useEffect(() => {
+        localStorage.setItem(VIEW_STATE_KEY, JSON.stringify({ filterType, selectedValues, colorMode }));
+    }, [filterType, selectedValues, colorMode]);
 
     useEffect(() => {
         if (jumpTarget) {
@@ -185,6 +250,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
             setSelectedValues([jumpTarget.value]);
             onJumpHandled();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [jumpTarget]);
 
     const loadSchedule = async () => {
@@ -216,23 +282,10 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
         setGenerating(true);
         try {
             const start = await runGeneration();
-            const jobId = start.data.job_id;
-            localStorage.setItem('activeGenJob', jobId);
-            const poll = async () => {
-                try {
-                    const s = await getGenerationStatus(jobId);
-                    if (s.data.status === 'completed') { setGenerating(false); localStorage.removeItem('activeGenJob'); await loadSchedule(); }
-                    else if (s.data.status === 'failed') { setGenerating(false); localStorage.removeItem('activeGenJob'); setGenError('יצירת המערכת נכשלה. נסי שוב.'); }
-                    else setTimeout(poll, 3000);
-                } catch (e) {
-                    setGenerating(false); localStorage.removeItem('activeGenJob');
-                    setGenError('שגיאה בבדיקת מצב היצירה');
-                }
-            };
-            setTimeout(poll, 3000);
+            trackJob(start.data.job_id);
         } catch (e) {
             setGenerating(false);
-            if (e.response && e.response.status === 409) setGenError('יצירת מערכת כבר רצה כרגע. נסי שוב עוד רגע.');
+            if (e.response && e.response.status === 409) setGenError('יצירת מערכת כבר רצה כרגע. אפשר לנסות שוב עוד רגע.');
             else setGenError('לא ניתן להתחיל יצירת מערכת');
         }
     };
@@ -242,23 +295,11 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
         setGenerating(true);
         try {
             const start = await runMemeticGeneration();
-            const jobId = start.data.job_id;
-            const poll = async () => {
-                try {
-                    const s = await getGenerationStatus(jobId);
-                    if (s.data.status === 'completed') { setGenerating(false); await loadSchedule(); }
-                    else if (s.data.status === 'failed') { setGenerating(false); setGenError('יצירת המערכת המשופרת נכשלה. נסי שוב.'); }
-                    else setTimeout(poll, 3000);
-                } catch (e) {
-                    setGenerating(false);
-                    setGenError('שגיאה בבדיקת מצב היצירה');
-                }
-            };
-            setTimeout(poll, 3000);
+            trackJob(start.data.job_id, { failMsg: 'שיפור המערכת נכשל. אפשר לנסות שוב.' });
         } catch (e) {
             setGenerating(false);
-            if (e.response && e.response.status === 409) setGenError('יצירת מערכת כבר רצה כרגע. נסי שוב עוד רגע.');
-            else setGenError('לא ניתן להתחיל יצירת מערכת משופרת');
+            if (e.response && e.response.status === 409) setGenError('יצירת מערכת כבר רצה כרגע. אפשר לנסות שוב עוד רגע.');
+            else setGenError('לא ניתן להתחיל שיפור מערכת');
         }
     };
 
@@ -277,7 +318,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
         }
     };
 
-    const requestGenerate = (type) => { setMoreMenuOpen(false); setConfirmGenerateType(type); };
+    const requestGenerate = (type) => setConfirmGenerateType(type);
     const runConfirmedGenerate = () => {
         const type = confirmGenerateType;
         setConfirmGenerateType(null);
@@ -295,18 +336,33 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
         }
     };
 
-    const tileOptions = () => {
+    const valuesForDim = (dim) => {
         const set = new Set();
-        entries.forEach(e => {
-            if (filterType === 'class') set.add(e.group_name);
-            else if (filterType === 'teacher') set.add(`${e.teacher_first_name} ${e.teacher_last_name}`);
-            else if (filterType === 'subject') set.add(e.subject_name);
-            else if (filterType === 'grade') set.add(extractGrade(e.group_name));
-        });
-        return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b, 'he'));
+        entries.forEach(e => { const k = dimKeyOf(e, dim); if (k) set.add(k); });
+        return [...set].sort((a, b) => String(a).localeCompare(String(b), 'he'));
     };
+
+    const entriesForDim = (dim, val) => entries.filter(e => dimKeyOf(e, dim) === val);
+    const entriesFor = (val) => entriesForDim(filterType, val);
+
+    const options = useMemo(
+        () => (filterType ? valuesForDim(filterType) : []),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [entries, filterType]
+    );
+
+    // אם נטענה מערכת אחרת, ערך שנשמר מקודם עלול כבר לא להתקיים בה —
+    // מסירים אותו כדי לא להציג לוח ריק בלי הסבר.
+    useEffect(() => {
+        if (!filterType || entries.length === 0) return;
+        const valid = new Set(options);
+        setSelectedValues(prev => {
+            const next = prev.filter(v => valid.has(v));
+            return next.length === prev.length ? prev : next;
+        });
+    }, [options, filterType, entries.length]);
+
     const tileLabel = (val) => (filterType === 'grade' ? `שכבת ${val}׳` : val);
-    const options = filterType ? tileOptions() : [];
     const comboFilteredOptions = options.filter(o => !comboInput.trim() || tileLabel(o).includes(comboInput.trim()));
 
     const selectView = (type) => {
@@ -320,32 +376,59 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
         setSelectedValues(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
     };
 
-    const entriesFor = (val) => entries.filter(e => {
-        if (filterType === 'class') return e.group_name === val;
-        if (filterType === 'teacher') return `${e.teacher_first_name} ${e.teacher_last_name}` === val;
-        if (filterType === 'subject') return e.subject_name === val;
-        if (filterType === 'grade') return extractGrade(e.group_name) === val;
-        return false;
-    });
-
-    const valuesForDim = (dim) => {
-        const set = new Set();
+    // מפה אחת של שיעורים לפי ערך ולפי משבצת. קודם כל משבצת סיננה מחדש את כל
+    // רשימת השיעורים (48 מעברים מלאים לכל מערכת מוצגת, בכל רינדור) — כאן זה
+    // חישוב אחד וגישה ישירה.
+    const cellMaps = useMemo(() => {
+        const byVal = new Map();
+        if (!filterType) return byVal;
         entries.forEach(e => {
-            if (dim === 'class') set.add(e.group_name);
-            else if (dim === 'teacher') set.add(`${e.teacher_first_name} ${e.teacher_last_name}`);
-            else if (dim === 'subject') set.add(e.subject_name);
-            else if (dim === 'grade') set.add(extractGrade(e.group_name));
+            const key = dimKeyOf(e, filterType);
+            if (!key) return;
+            let cells = byVal.get(key);
+            if (!cells) { cells = new Map(); byVal.set(key, cells); }
+            const ck = `${e.day_of_week}-${e.hour_of_day}`;
+            const list = cells.get(ck);
+            if (list) list.push(e); else cells.set(ck, [e]);
         });
-        return [...set].filter(Boolean).sort((a, b) => String(a).localeCompare(String(b), 'he'));
-    };
+        return byVal;
+    }, [entries, filterType]);
 
-    const entriesForDim = (dim, val) => entries.filter(e => {
-        if (dim === 'class') return e.group_name === val;
-        if (dim === 'teacher') return `${e.teacher_first_name} ${e.teacher_last_name}` === val;
-        if (dim === 'subject') return e.subject_name === val;
-        if (dim === 'grade') return extractGrade(e.group_name) === val;
-        return false;
-    });
+    const lessonsAt = (val, day, hour) => cellMaps.get(val)?.get(`${day}-${hour}`) || EMPTY_LESSONS;
+
+    const breaks = schoolSettings?.breaks || [];
+    const activeDays = schoolSettings?.active_days || DAY_ORDER;
+    const visibleDays = DAY_ORDER.filter(d => activeDays.includes(d));
+
+    // מספר השיעורים בפועל לכל יום — פעם אחת, במקום חישוב חוזר לכל משבצת.
+    const maxPeriodByDay = useMemo(() => {
+        const map = {};
+        DAY_ORDER.forEach(day => {
+            if (!schoolSettings) { map[day] = HOURS.length; return; }
+            let end;
+            if (day === 6) end = schoolSettings.friday_end_time;
+            else {
+                const ends = Object.values(schoolSettings.grade_end_times || {}).filter(Boolean).sort();
+                end = ends[ends.length - 1];
+            }
+            const n = periodsUntil(schoolSettings.start_time, end, schoolSettings.breaks || []);
+            map[day] = n ? Math.min(n, HOURS.length) : HOURS.length;
+        });
+        return map;
+    }, [schoolSettings]);
+
+    // מציגים רק שורות שקיימות לפחות ביום אחד, במקום שורות מפוספסות עד 8.
+    const visibleHours = useMemo(() => {
+        const max = visibleDays.reduce((m, d) => Math.max(m, maxPeriodByDay[d] || 0), 0);
+        return HOURS.filter(h => h <= (max || HOURS.length));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [maxPeriodByDay, visibleDays.join(',')]);
+
+    const naCell = (day, hour) => hour > (maxPeriodByDay[day] || HOURS.length);
+
+    const showColorControl = filterType === 'class' || filterType === 'grade';
+    const effectiveColorMode = FORCED_COLOR_MODE[filterType] || colorMode;
+    const hasOpenSchedule = selectedValues.length > 0;
 
     const closeExport = () => { setExportOpen(false); setExportStage('format'); setExportDim(null); setExportSearch(''); setExportMsg(''); };
 
@@ -374,7 +457,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
     };
 
     const exportCurrent = async (format = 'excel') => {
-        if (!selectedValues || selectedValues.length === 0) {
+        if (!hasOpenSchedule) {
             setExportMsg('אין פריט שפתוח כרגע');
             return;
         }
@@ -394,6 +477,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
     };
 
     const today = todayAppDay();
+    const totalViolations = violationsSummary ? violationsSummary.hard + violationsSummary.soft : 0;
 
     if (editMode) {
         return (
@@ -417,10 +501,6 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                                 {runInfo.is_published ? 'פורסם' : 'טיוטה'}
                             </span>
                             <span>נוצר ב-{fmtDate(runInfo.run_at)}</span>
-                            {/* <span>נוצר ב-{fmtDate(runInfo.run_at)}</span><span>·</span>
-                            <span>{ALGO_LABELS[runInfo.algorithm] || runInfo.algorithm}</span><span>·</span>
-                            <span>ציון {runInfo.score}</span><span>·</span>
-                            <span>{violationsSummary ? violationsSummary.hard + violationsSummary.soft : '—'} התנגשויות</span> */}
                         </>
                     ) : (
                         <span>אין מערכת שעות פעילה כרגע</span>
@@ -432,7 +512,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: '#FAE8E8', border: '1px solid #f0c7c0', borderRadius: '10px', padding: '10px 14px', marginBottom: '16px', fontSize: '13px', color: '#8a3a2c' }}>
                     <i className="ti ti-alert-triangle" style={{ fontSize: '16px', flexShrink: 0 }} aria-hidden="true"></i>
                     <span style={{ flex: 1 }}>נמצאו {violationsSummary.hard} הפרות קשיחות שדורשות תשומת לב</span>
-                    <button onClick={openViolations} style={{ width: 'fit-content', background: 'none', border: 'none', color: '#8a3a2c', textDecoration: 'underline', cursor: 'pointer', fontSize: '13px', fontFamily: 'Varela Round, sans-serif' }}>צפה בפירוט</button>
+                    <button onClick={openViolations} style={{ width: 'fit-content', background: 'none', border: 'none', color: '#8a3a2c', textDecoration: 'underline', cursor: 'pointer', fontSize: '13px', fontFamily: 'Varela Round, sans-serif' }}>צפייה בפירוט</button>
                 </div>
             )}
 
@@ -440,44 +520,30 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
             {genError && <div style={{ fontSize: '12px', color: '#c0705a', marginBottom: '12px' }}>{genError}</div>}
             {publishMsg && <div style={{ fontSize: '12px', color: '#6b8f5e', marginBottom: '12px' }}>{publishMsg}</div>}
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
                 <button onClick={() => setShowPublishConfirm(true)} disabled={publishing || !runInfo} style={{ ...styles.btnAdd, padding: '13px 26px', fontSize: '16px', backgroundColor: '#6b8f5e', opacity: (publishing || !runInfo) ? 0.5 : 1, cursor: (publishing || !runInfo) ? 'not-allowed' : 'pointer' }}>
                     <i className="ti ti-send" aria-hidden="true"></i>
-                    {publishing ? 'מפרסם…' : (runInfo?.is_published ? 'פרסם מחדש' : 'פרסם לצוות')}
+                    {publishing ? 'מפרסם…' : (runInfo?.is_published ? 'פרסום מחדש' : 'פרסום לצוות')}
                 </button>
+
+                <button onClick={() => requestGenerate('new')} disabled={generating} style={{ ...styles.btnOutline, padding: '13px 24px', fontSize: '16px', opacity: generating ? 0.5 : 1, cursor: generating ? 'not-allowed' : 'pointer' }}>
+                    <i className={`ti ${generating ? 'ti-loader' : 'ti-wand'}`} aria-hidden="true"></i> יצירת מערכת חדשה
+                </button>
+
                 <button onClick={() => requestGenerate('improve')} disabled={generating || !runInfo} style={{ ...styles.btnOutline, padding: '13px 24px', fontSize: '16px', opacity: (generating || !runInfo) ? 0.5 : 1, cursor: (generating || !runInfo) ? 'not-allowed' : 'pointer' }}>
-                    <i className="ti ti-sparkles" aria-hidden="true"></i> צור מערכת שעות חדשה
+                    <i className="ti ti-sparkles" aria-hidden="true"></i> שיפור המערכת
                 </button>
+
                 <button onClick={() => setEditMode(true)} disabled={!runInfo} style={{ ...styles.btnOutline, padding: '13px 24px', fontSize: '16px', opacity: !runInfo ? 0.5 : 1, cursor: !runInfo ? 'not-allowed' : 'pointer' }}>
-                    <i className="ti ti-edit" aria-hidden="true"></i> עריכת מערכת ידנית
-                </button>
-                <button onClick={() => setColorMode(m => m === 'subject' ? 'teacher' : 'subject')} style={{ ...styles.btnOutline, padding: '13px 22px', fontSize: '15px' }}>
-                    <i className="ti ti-palette" aria-hidden="true"></i> צבעים: {colorMode === 'subject' ? 'לפי מקצוע' : 'לפי מורה'}
-                </button>
-                <div style={{ position: 'relative' }}>
-                <button
-                    onClick={() => { if (moreMenuOpen) { setMoreMenuOpen(false); } else { setMoreMenuOpen(true); } }}
-                    style={{ ...styles.btnOutline, padding: '13px 22px', fontSize: '15px' }}
-                >
-                    <i className="ti ti-dots-vertical" aria-hidden="true"></i> פעולות נוספות
+                    <i className="ti ti-edit" aria-hidden="true"></i> עריכה ידנית
                 </button>
 
-                {moreMenuOpen && (
-                    <>
-                        <div onClick={() => setMoreMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 900 }} />
-                        <div dir="rtl" style={{ position: 'absolute', top: '0', right: 'calc(100% + 10px)', zIndex: 901, backgroundColor: '#fff', border: '1px solid #e2dacc', borderRadius: '12px', boxShadow: '0 8px 24px rgba(74,63,53,0.14)', width: '230px', padding: '8px' }}>
-                            <button onClick={() => { setMoreMenuOpen(false); openViolations(); }} disabled={!runInfo} style={menuItemStyle(false)}>
-                                <i className="ti ti-alert-triangle" aria-hidden="true"></i>
-                                <span>צפה בהפרות</span>
-                                {violationsSummary && (violationsSummary.hard + violationsSummary.soft) > 0 && (
-                                    <span style={{ marginRight: 'auto', fontSize: '11px', backgroundColor: '#FAE8E8', color: '#c0705a', borderRadius: '10px', padding: '1px 8px' }}>{violationsSummary.hard + violationsSummary.soft}</span>
-                                )}
-                            </button>
-
-                        </div>
-                    </>
-                )}
-                </div>
+                <button onClick={openViolations} disabled={!runInfo} style={{ ...styles.btnOutline, padding: '13px 22px', fontSize: '15px', opacity: !runInfo ? 0.5 : 1, cursor: !runInfo ? 'not-allowed' : 'pointer' }}>
+                    <i className="ti ti-alert-triangle" aria-hidden="true"></i> צפייה בהפרות
+                    {totalViolations > 0 && (
+                        <span style={{ marginRight: '4px', fontSize: '11px', backgroundColor: '#FAE8E8', color: '#c0705a', borderRadius: '10px', padding: '1px 8px' }}>{totalViolations}</span>
+                    )}
+                </button>
             </div>
 
             {!runInfo ? (
@@ -490,10 +556,10 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
                         <button onClick={() => requestGenerate('new')} disabled={generating} style={{ ...styles.btnAdd, opacity: generating ? 0.7 : 1, cursor: generating ? 'not-allowed' : 'pointer' }}>
                             <i className={`ti ${generating ? 'ti-loader' : 'ti-wand'}`} aria-hidden="true"></i>
-                            {generating ? 'בתהליך יצירה…' : 'צור מערכת חדשה'}
+                            {generating ? 'בתהליך יצירה…' : 'יצירת מערכת חדשה'}
                         </button>
                         <button onClick={onNavigateToHistory} style={{ width: 'fit-content', background: 'none', border: 'none', color: '#8a9e78', fontSize: '13px', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif', textDecoration: 'underline' }}>
-                            פתח מערכת קיימת
+                            פתיחת מערכת קיימת
                         </button>
                     </div>
                 </div>
@@ -530,7 +596,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                                             value={comboInput}
                                             onChange={e => { setComboInput(e.target.value); setComboOpen(true); }}
                                             onFocus={() => setComboOpen(true)}
-                                            placeholder={`חפשי ${DIM_LABEL[filterType]}, או לחצי כאן לצפייה ברשימה...`}
+                                            placeholder={`חיפוש ${DIM_LABEL[filterType]} או בחירה מהרשימה…`}
                                             style={{ border: 'none', outline: 'none', flex: 1, fontSize: '15px', backgroundColor: 'transparent', color: '#4a3f35', fontFamily: 'Varela Round, sans-serif' }}
                                         />
                                     </div>
@@ -558,93 +624,110 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                         </div>
                     )}
 
-                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
-                        <div style={{ position: 'relative', marginRight: 'auto' }}>
-                            <button
-                                onClick={() => { if (exportOpen) { closeExport(); } else { setExportOpen(true); setExportStage('format'); } }}
-                                style={{ ...styles.btnOutline, padding: '13px 22px', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '7px' }}
-                            >
-                                <i className="ti ti-download" aria-hidden="true"></i> ייצוא <i className="ti ti-chevron-down" style={{ fontSize: '13px' }} aria-hidden="true"></i>
-                            </button>
+                    {/* שורת התצוגה — מופיעה רק כשיש מערכת פתוחה בפועל.
+                        לפני כן אין מה לצבוע ואין מה לייצא. */}
+                    {hasOpenSchedule && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                            {showColorControl && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span style={{ fontSize: '14px', color: '#8a7a6e' }}>צבעי המערכת:</span>
+                                    <div style={{ display: 'inline-flex', backgroundColor: '#f5f2ee', borderRadius: '11px', padding: '4px', gap: '2px' }}>
+                                        {COLOR_MODES.map(m => (
+                                            <button key={m.id} onClick={() => setColorMode(m.id)} style={colorPillStyle(colorMode === m.id)}>
+                                                {m.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
-                            {exportOpen && (
-                                <>
-                                    <div onClick={closeExport} style={{ position: 'fixed', inset: 0, zIndex: 900 }} />
-                                    <div dir="rtl" style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 901, backgroundColor: '#fff', border: '1px solid #e2dacc', borderRadius: '12px', boxShadow: '0 8px 24px rgba(74,63,53,0.14)', width: '280px', padding: '8px', maxHeight: '360px', overflowY: 'auto' }}>
-                                        {exportMsg && (
-                                            <div style={{ fontSize: '12px', color: '#c0705a', backgroundColor: '#fff8f6', border: '1px solid #edc9bf', borderRadius: '8px', padding: '8px 10px', marginBottom: '8px', textAlign: 'center' }}>
-                                                {exportMsg}
-                                            </div>
-                                        )}
-                                        {exportStage === 'format' ? (
-                                            <>
-                                                <button onClick={() => { setExportFormat('excel'); setExportStage('target'); }} style={menuItemStyle(false)}>
-                                                    <i className="ti ti-file-spreadsheet" aria-hidden="true"></i> Excel
-                                                </button>
-                                                <button onClick={() => { setExportFormat('pdf'); setExportStage('target'); }} style={menuItemStyle(false)}>
-                                                    <i className="ti ti-file-type-pdf" aria-hidden="true"></i> PDF
-                                                </button>
-                                            </>
-                                        ) : exportStage === 'target' ? (
-                                            <>
-                                                <button onClick={() => setExportStage('format')} style={{ ...menuItemStyle(false), color: '#8a7a6e' }}>
-                                                    <i className="ti ti-chevron-right" aria-hidden="true"></i> חזרה
-                                                </button>
-                                                <button onClick={() => exportCurrent(exportFormat)} style={menuItemStyle(true)}>
-                                                    <i className="ti ti-eye" aria-hidden="true"></i> ייצא את מה שפתוח כרגע
-                                                </button>
-                                                <div style={{ height: '1px', backgroundColor: '#f0ebe3', margin: '6px 4px' }} />
-                                                {['class', 'teacher', 'subject', 'grade'].map(dim => (
-                                                    <button key={dim} onClick={() => { setExportDim(dim); setExportSearch(''); setExportStage('dim'); }} style={menuItemStyle(false)}>
-                                                        <span>ייצוא לפי {DIM_LABEL[dim]}</span>
-                                                        <i className="ti ti-chevron-left" style={{ marginRight: 'auto' }} aria-hidden="true"></i>
+                            <div style={{ position: 'relative', marginRight: 'auto' }}>
+                                <button
+                                    onClick={() => { if (exportOpen) { closeExport(); } else { setExportOpen(true); setExportStage('format'); } }}
+                                    style={{ ...styles.btnOutline, padding: '13px 22px', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '7px' }}
+                                >
+                                    <i className="ti ti-download" aria-hidden="true"></i> ייצוא <i className="ti ti-chevron-down" style={{ fontSize: '13px' }} aria-hidden="true"></i>
+                                </button>
+
+                                {exportOpen && (
+                                    <>
+                                        <div onClick={closeExport} style={{ position: 'fixed', inset: 0, zIndex: 900 }} />
+                                        <div dir="rtl" style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 901, backgroundColor: '#fff', border: '1px solid #e2dacc', borderRadius: '12px', boxShadow: '0 8px 24px rgba(74,63,53,0.14)', width: '280px', padding: '8px', maxHeight: '360px', overflowY: 'auto' }}>
+                                            {exportMsg && (
+                                                <div style={{ fontSize: '12px', color: '#c0705a', backgroundColor: '#fff8f6', border: '1px solid #edc9bf', borderRadius: '8px', padding: '8px 10px', marginBottom: '8px', textAlign: 'center' }}>
+                                                    {exportMsg}
+                                                </div>
+                                            )}
+                                            {exportStage === 'format' ? (
+                                                <>
+                                                    <button onClick={() => { setExportFormat('excel'); setExportStage('target'); }} style={menuItemStyle(false)}>
+                                                        <i className="ti ti-file-spreadsheet" aria-hidden="true"></i> Excel
                                                     </button>
-                                                ))}
-                                            </>
-                                        ) : (
-                                            <>
-                                                <button onClick={() => setExportStage('target')} style={{ ...menuItemStyle(false), color: '#8a7a6e' }}>
-                                                    <i className="ti ti-chevron-right" aria-hidden="true"></i> חזרה
-                                                </button>
-                                                <button onClick={() => exportAllOfDim(exportDim, exportFormat)} style={menuItemStyle(true)}>
-                                                    <i className="ti ti-stack-2" aria-hidden="true"></i> ייצא הכל (כל {DIM_LABEL[exportDim]})
-                                                </button>
-                                                <input
-                                                    autoFocus
-                                                    value={exportSearch}
-                                                    onChange={e => setExportSearch(e.target.value)}
-                                                    placeholder={`חיפוש ${DIM_LABEL[exportDim]}…`}
-                                                    style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', margin: '6px 0', border: '1px solid #e2dacc', borderRadius: '8px', fontSize: '13px', fontFamily: 'Varela Round, sans-serif', backgroundColor: '#FAF7F2' }}
-                                                />
-                                                {valuesForDim(exportDim)
-                                                    .filter(v => String(v).includes(exportSearch.trim()))
-                                                    .map(v => (
-                                                        <button key={v} onClick={() => exportOneValue(exportDim, v, exportFormat)} style={menuItemStyle(false)}>
-                                                            {exportDim === 'grade' ? `שכבת ${v}׳` : v}
+                                                    <button onClick={() => { setExportFormat('pdf'); setExportStage('target'); }} style={menuItemStyle(false)}>
+                                                        <i className="ti ti-file-type-pdf" aria-hidden="true"></i> PDF
+                                                    </button>
+                                                </>
+                                            ) : exportStage === 'target' ? (
+                                                <>
+                                                    <button onClick={() => setExportStage('format')} style={{ ...menuItemStyle(false), color: '#8a7a6e' }}>
+                                                        <i className="ti ti-chevron-right" aria-hidden="true"></i> חזרה
+                                                    </button>
+                                                    <button onClick={() => exportCurrent(exportFormat)} style={menuItemStyle(true)}>
+                                                        <i className="ti ti-eye" aria-hidden="true"></i> ייצוא מה שפתוח כרגע
+                                                    </button>
+                                                    <div style={{ height: '1px', backgroundColor: '#f0ebe3', margin: '6px 4px' }} />
+                                                    {['class', 'teacher', 'subject', 'grade'].map(dim => (
+                                                        <button key={dim} onClick={() => { setExportDim(dim); setExportSearch(''); setExportStage('dim'); }} style={menuItemStyle(false)}>
+                                                            <span>ייצוא לפי {DIM_LABEL[dim]}</span>
+                                                            <i className="ti ti-chevron-left" style={{ marginRight: 'auto' }} aria-hidden="true"></i>
                                                         </button>
                                                     ))}
-                                            </>
-                                        )}
-                                    </div>
-                                </>
-                            )}
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <button onClick={() => setExportStage('target')} style={{ ...menuItemStyle(false), color: '#8a7a6e' }}>
+                                                        <i className="ti ti-chevron-right" aria-hidden="true"></i> חזרה
+                                                    </button>
+                                                    <button onClick={() => exportAllOfDim(exportDim, exportFormat)} style={menuItemStyle(true)}>
+                                                        <i className="ti ti-stack-2" aria-hidden="true"></i> ייצוא הכל (כל {DIM_LABEL[exportDim]})
+                                                    </button>
+                                                    <input
+                                                        autoFocus
+                                                        value={exportSearch}
+                                                        onChange={e => setExportSearch(e.target.value)}
+                                                        placeholder={`חיפוש ${DIM_LABEL[exportDim]}…`}
+                                                        style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', margin: '6px 0', border: '1px solid #e2dacc', borderRadius: '8px', fontSize: '13px', fontFamily: 'Varela Round, sans-serif', backgroundColor: '#FAF7F2' }}
+                                                    />
+                                                    {valuesForDim(exportDim)
+                                                        .filter(v => String(v).includes(exportSearch.trim()))
+                                                        .map(v => (
+                                                            <button key={v} onClick={() => exportOneValue(exportDim, v, exportFormat)} style={menuItemStyle(false)}>
+                                                                {exportDim === 'grade' ? `שכבת ${v}׳` : v}
+                                                            </button>
+                                                        ))}
+                                                </>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    )}
 
-                    {selectedValues.length === 0 ? (
+                    {!hasOpenSchedule ? (
                         <div style={{ position: 'relative', border: '1px solid #ece7dd', borderRadius: '12px', overflow: 'hidden' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', opacity: 0.7 }}>
                                 <thead>
                                     <tr>
                                         <th style={{ width: '60px', padding: '10px', border: '1px solid #ece7dd', backgroundColor: '#f5f2ee', fontSize: '12px', color: '#a49c8e' }}>שעה</th>
-                                        {DAY_ORDER.map(d => <th key={d} style={{ padding: '10px', border: '1px solid #ece7dd', backgroundColor: '#f5f2ee', fontSize: '13px', color: '#a49c8e' }}>{DAY_NAMES_BY_NUM[d]}</th>)}
+                                        {visibleDays.map(d => <th key={d} style={{ padding: '10px', border: '1px solid #ece7dd', backgroundColor: '#f5f2ee', fontSize: '13px', color: '#a49c8e' }}>{DAY_NAMES_BY_NUM[d]}</th>)}
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {SKELETON_ROWS.map(hour => (
                                         <tr key={hour}>
                                             <td style={{ border: '1px solid #ece7dd', padding: '6px', textAlign: 'center', color: '#b0a897', fontSize: '12px' }}>{hour}</td>
-                                            {DAY_ORDER.map(d => (
+                                            {visibleDays.map(d => (
                                                 <td key={d} style={{ border: '1px solid #ece7dd', padding: '6px', height: '58px' }}>
                                                     <div style={{ backgroundColor: '#EFEAE1', border: '1px solid #e2dacc', borderRadius: '8px', height: '100%' }}></div>
                                                 </td>
@@ -657,92 +740,79 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                                 <div style={{ width: '64%', minHeight: '210px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', border: '1px solid #e2dacc', borderRadius: '14px', boxShadow: '0 8px 24px rgba(74,63,53,0.14)', textAlign: 'center', padding: '20px' }}>
                                     <i className="ti ti-calendar-search" style={{ fontSize: '30px', color: '#8a9e78', display: 'block', marginBottom: '12px' }} aria-hidden="true"></i>
                                     <div style={{ fontSize: '15px', color: '#4a3f35', lineHeight: 1.5 }}>
-                                        {!filterType ? 'בחרי כיתה, מורה, מקצוע או שכבה כדי להתחיל' : 'בחרי מהרשימה כדי להציג מערכת שעות'}
+                                        {!filterType ? 'יש לבחור כיתה, מורה, מקצוע או שכבה כדי להתחיל' : 'יש לבחור מהרשימה כדי להציג מערכת שעות'}
                                     </div>
                                 </div>
                             </div>
                         </div>
                     ) : (
-                        selectedValues.map(val => {
-                            const valEntries = entriesFor(val);
-                            const cellFor = (day, hour) => valEntries.filter(e => e.day_of_week === day && e.hour_of_day === hour);
-                            const activeDays = (schoolSettings?.active_days) || [1, 2, 3, 4, 5, 6];
-                            const maxPeriodForDay = (day) => {
-                                if (!schoolSettings) return 8;
-                                let end;
-                                if (day === 6) end = schoolSettings.friday_end_time;
-                                else { const ends = Object.values(schoolSettings.grade_end_times || {}).filter(Boolean).sort(); end = ends[ends.length - 1]; }
-                                const n = periodsUntil(schoolSettings.start_time, end, schoolSettings.breaks || []);
-                                return n ? Math.min(n, 8) : 8;
-                            };
-                            const naCell = (day, hour) => !activeDays.includes(day) || hour > maxPeriodForDay(day);
-                            return (
-                                <div key={val} style={{ ...styles.card, boxShadow: '0 1px 3px rgba(74,63,53,0.06)' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                                        <h3 style={{ fontSize: '16px', color: '#4a3f35', margin: 0 }}>{tileLabel(val)}</h3>
-                                        <button onClick={() => toggleValue(val)} style={{ width: 'fit-content', background: 'none', border: 'none', cursor: 'pointer', color: '#c8baa6', fontSize: '13px', fontFamily: 'Varela Round, sans-serif' }}>
-                                            <i className="ti ti-x" aria-hidden="true"></i> הסתר
-                                        </button>
-                                    </div>
-                                    <div style={{ overflowX: 'auto' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-                                            <thead>
-                                                <tr>
-                                                    <th style={{ ...gridStyles.gridHeadCell, width: '60px', backgroundColor: '#EDF4E8' }}>שעה</th>
-                                                    {DAY_ORDER.map(d => (
-                                                        <th key={d} style={{ ...gridStyles.gridHeadCell, backgroundColor: d === today ? '#dcebd0' : '#EDF4E8' }}>
-                                                            {DAY_NAMES_BY_NUM[d]}
-                                                        </th>
-                                                    ))}
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {HOURS.map(hour => {
-                                                    const breakAfter = breaks.find(b => b.after_lesson === hour);
-                                                    return (
-                                                        <Fragment key={hour}>
-                                                            <tr>
-                                                                <td style={gridStyles.gridHourCell}>שיעור {hour}</td>
-                                                                {DAY_ORDER.map(day => {
-                                                                    if (naCell(day, hour)) {
-                                                                        return <td key={day} style={{ ...gridStyles.gridCell, ...gridStyles.naCell }}></td>;
-                                                                    }
-                                                                    const lessons = cellFor(day, hour);
-                                                                    return (
-                                                                        <td key={day} style={{ ...gridStyles.gridCell, backgroundColor: day === today ? '#f7faf5' : undefined }}>
-                                                                            {lessons.length === 0 ? (
-                                                                                <div style={gridStyles.freeCell}>פנוי</div>
-                                                                            ) : lessons.map((e, idx) => {
-                                                                                const color = colorForEntry(e, colorMode);
-                                                                                return (
-                                                                                    <div key={idx} className="lesson-box" style={{ ...gridStyles.lessonBox, backgroundColor: color.bg, borderRight: `3px solid ${color.accent}` }}>
-                                                                                        <div style={{ fontWeight: 700 }}>{e.subject_name}</div>
-                                                                                        {filterType !== 'teacher' && <div style={{ color: '#8a7a6e' }}>{e.teacher_first_name} {e.teacher_last_name}</div>}
-                                                                                        {filterType !== 'class' && <div style={{ color: '#8a7a6e' }}>{e.group_name}</div>}
-                                                                                        {e.room_name && <div style={{ color: '#a99', fontSize: '10px' }}>{e.room_name}</div>}
-                                                                                    </div>
-                                                                                );
-                                                                            })}
-                                                                        </td>
-                                                                    );
-                                                                })}
-                                                            </tr>
-                                                            {breakAfter && (
-                                                                <tr>
-                                                                    <td colSpan={DAY_ORDER.length + 1} style={{ padding: '5px', background: '#f0ebe0', fontSize: '11px', color: '#8a7a6e', textAlign: 'center', border: '1px solid #e2dacc' }}>
-                                                                        הפסקה · {breakAfter.duration_minutes} דקות
-                                                                    </td>
-                                                                </tr>
-                                                            )}
-                                                        </Fragment>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                        selectedValues.map(val => (
+                            <div key={val} style={{ ...styles.card, boxShadow: '0 1px 3px rgba(74,63,53,0.06)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                                    <h3 style={{ fontSize: '16px', color: '#4a3f35', margin: 0 }}>{tileLabel(val)}</h3>
+                                    <button onClick={() => toggleValue(val)} style={{ width: 'fit-content', background: 'none', border: 'none', cursor: 'pointer', color: '#c8baa6', fontSize: '13px', fontFamily: 'Varela Round, sans-serif' }}>
+                                        <i className="ti ti-x" aria-hidden="true"></i> הסתרה
+                                    </button>
                                 </div>
-                            );
-                        })
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                                        <thead>
+                                            <tr>
+                                                <th style={{ ...gridStyles.gridHeadCell, width: '60px', backgroundColor: '#EDF4E8' }}>שעה</th>
+                                                {visibleDays.map(d => (
+                                                    <th key={d} style={{ ...gridStyles.gridHeadCell, backgroundColor: d === today ? '#dcebd0' : '#EDF4E8' }}>
+                                                        {DAY_NAMES_BY_NUM[d]}
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {visibleHours.map(hour => {
+                                                const breakAfter = breaks.find(b => b.after_lesson === hour);
+                                                const isLastVisibleHour = hour === visibleHours[visibleHours.length - 1];
+                                                return (
+                                                    <Fragment key={hour}>
+                                                        <tr>
+                                                            <td style={gridStyles.gridHourCell}>שיעור {hour}</td>
+                                                            {visibleDays.map(day => {
+                                                                if (naCell(day, hour)) {
+                                                                    return <td key={day} style={{ ...gridStyles.gridCell, ...gridStyles.naCell }}></td>;
+                                                                }
+                                                                const lessons = lessonsAt(val, day, hour);
+                                                                return (
+                                                                    <td key={day} style={{ ...gridStyles.gridCell, backgroundColor: day === today ? '#f7faf5' : undefined }}>
+                                                                        {lessons.length === 0 ? (
+                                                                            <div style={gridStyles.freeCell}>פנוי</div>
+                                                                        ) : lessons.map((e, idx) => {
+                                                                            const color = colorForEntry(e, effectiveColorMode);
+                                                                            return (
+                                                                                <div key={idx} className="lesson-box" style={{ ...gridStyles.lessonBox, backgroundColor: color.bg, borderRight: `3px solid ${color.accent}` }}>
+                                                                                    <div style={{ fontWeight: 700 }}>{e.subject_name}</div>
+                                                                                    {filterType !== 'teacher' && <div style={{ color: '#8a7a6e' }}>{e.teacher_first_name} {e.teacher_last_name}</div>}
+                                                                                    {filterType !== 'class' && <div style={{ color: '#8a7a6e' }}>{e.group_name}</div>}
+                                                                                    {e.room_name && <div style={{ color: '#a99', fontSize: '10px' }}>{e.room_name}</div>}
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                        </tr>
+                                                        {breakAfter && !isLastVisibleHour && (
+                                                            <tr>
+                                                                <td colSpan={visibleDays.length + 1} style={{ padding: '5px', background: '#f0ebe0', fontSize: '11px', color: '#8a7a6e', textAlign: 'center', border: '1px solid #e2dacc' }}>
+                                                                    הפסקה · {breakAfter.duration_minutes} דקות
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </Fragment>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        ))
                     )}
 
                     <div style={{ textAlign: 'left', fontSize: '11px', color: '#c8baa6', marginTop: '18px' }}>
@@ -755,13 +825,15 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                 <div onClick={() => setConfirmGenerateType(null)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
                     <div onClick={e => e.stopPropagation()} style={{ backgroundColor: '#FAF7F2', border: '1px solid #e2dacc', borderRadius: '14px', padding: '24px', width: '90%', maxWidth: '420px', boxShadow: '0 10px 30px rgba(0,0,0,0.15)' }}>
                         <h3 style={{ margin: '0 0 12px 0', fontSize: '17px', color: '#4a3f35' }}>
-                            {confirmGenerateType === 'new' ? 'ליצור מערכת שעות חדשה?' : 'לבנות מערכת חדשה?'}
+                            {confirmGenerateType === 'new' ? 'ליצור מערכת שעות חדשה?' : 'לשפר את המערכת הקיימת?'}
                         </h3>
                         <p style={{ margin: '0 0 20px 0', fontSize: '14px', color: '#4a3f35', lineHeight: 1.6 }}>
-                            התהליך עשוי לקחת עד כ-3 דקות.{confirmGenerateType === 'new' ? ' המערכת הנוכחית תישמר בהיסטוריה ולא תימחק.' : ''}
+                            {confirmGenerateType === 'new'
+                                ? 'התהליך עשוי לקחת עד כ-3 דקות. המערכת הנוכחית תישמר בהיסטוריה ולא תימחק.'
+                                : 'תיבנה גרסה משופרת על בסיס המערכת הנוכחית. התהליך עשוי לקחת עד כ-3 דקות, והמערכת הנוכחית תישמר בהיסטוריה.'}
                         </p>
                         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-start' }}>
-                            <button onClick={runConfirmedGenerate} style={{ backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '14px', cursor: 'pointer' }}>כן, המשך/י</button>
+                            <button onClick={runConfirmedGenerate} style={{ backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '14px', cursor: 'pointer' }}>{confirmGenerateType === 'new' ? 'יצירה' : 'שיפור'}</button>
                             <button onClick={() => setConfirmGenerateType(null)} style={{ ...styles.btnOutline, padding: '9px 18px', fontSize: '14px' }}>ביטול</button>
                         </div>
                     </div>
@@ -782,7 +854,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                             </p>
                         )}
                         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-start' }}>
-                            <button onClick={() => { setShowPublishConfirm(false); handlePublish(); }} style={{ backgroundColor: '#6b8f5e', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '14px', cursor: 'pointer' }}>כן, פרסם/י</button>
+                            <button onClick={() => { setShowPublishConfirm(false); handlePublish(); }} style={{ backgroundColor: '#6b8f5e', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '14px', cursor: 'pointer' }}>פרסום</button>
                             <button onClick={() => setShowPublishConfirm(false)} style={{ ...styles.btnOutline, padding: '9px 18px', fontSize: '14px' }}>ביטול</button>
                         </div>
                     </div>
@@ -820,7 +892,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                                         />
                                         {violationSearch && (
                                             <button onClick={() => setViolationSearch('')} style={{ padding: '8px 14px', fontSize: '13px', border: '1px solid #e2dacc', borderRadius: '8px', background: '#f5f2ee', color: '#8a7a6e', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                                                <i className="ti ti-filter-off" aria-hidden="true"></i> נקה סינון
+                                                <i className="ti ti-filter-off" aria-hidden="true"></i> ניקוי סינון
                                             </button>
                                         )}
                                     </div>
