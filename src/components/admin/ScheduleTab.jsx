@@ -1,8 +1,4 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
-import {
-    runGeneration, runMemeticGeneration, getGenerationStatus, getCurrentSchedule,
-    publishSchedule, getViolations, getSchoolSettings,
-} from '../../services/api';
 import { exportSingleSchedule, exportMultiSchedule } from '../../utils/exportSchedule';
 import { exportSinglePDF, exportMultiPDF } from '../../utils/exportSchedulePDF';
 import { styles } from '../../pages/adminDashboard.styles';
@@ -311,6 +307,8 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
         }
     };
 
+    // "יצירת מערכת חדשה" — הצינור המלא בשרת: CSP -> GA ממטי -> תיקון הפרות
+    // (endpoint /generation/run-memetic). זהו הכפתור היחיד ליצירה.
     const handleGenerate = async () => {
         setGenError('');
         setGenerating(true);
@@ -324,18 +322,6 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
         }
     };
 
-    const handleGenerateMemetic = async () => {
-        setGenError('');
-        setGenerating(true);
-        try {
-            const start = await runMemeticGeneration();
-            trackJob(start.data.job_id, { failMsg: 'שיפור המערכת נכשל. אפשר לנסות שוב.' });
-        } catch (e) {
-            setGenerating(false);
-            if (e.response && e.response.status === 409) setGenError('יצירת מערכת כבר רצה כרגע. אפשר לנסות שוב עוד רגע.');
-            else setGenError('לא ניתן להתחיל שיפור מערכת');
-        }
-    };
 
     const handlePublish = async () => {
         setPublishing(true);
@@ -354,10 +340,8 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
 
     const requestGenerate = (type) => setConfirmGenerateType(type);
     const runConfirmedGenerate = () => {
-        const type = confirmGenerateType;
         setConfirmGenerateType(null);
-        if (type === 'new') handleGenerate();
-        else if (type === 'improve') handleGenerateMemetic();
+        handleGenerate();
     };
 
     const openViolations = async () => {
@@ -578,10 +562,6 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
 
                 <button onClick={() => requestGenerate('new')} disabled={generating} style={{ ...styles.btnOutline, padding: '13px 24px', fontSize: '16px', opacity: generating ? 0.5 : 1, cursor: generating ? 'not-allowed' : 'pointer' }}>
                     <i className={`ti ${generating ? 'ti-loader' : 'ti-wand'}`} aria-hidden="true"></i> יצירת מערכת חדשה
-                </button>
-
-                <button onClick={() => requestGenerate('improve')} disabled={generating || !runInfo} style={{ ...styles.btnOutline, padding: '13px 24px', fontSize: '16px', opacity: (generating || !runInfo) ? 0.5 : 1, cursor: (generating || !runInfo) ? 'not-allowed' : 'pointer' }}>
-                    <i className="ti ti-sparkles" aria-hidden="true"></i> שיפור המערכת
                 </button>
 
                 <button onClick={() => setEditMode(true)} disabled={!runInfo} style={{ ...styles.btnOutline, padding: '13px 24px', fontSize: '16px', opacity: !runInfo ? 0.5 : 1, cursor: !runInfo ? 'not-allowed' : 'pointer' }}>
