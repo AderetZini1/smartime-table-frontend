@@ -5,7 +5,6 @@ import { getMyRequests } from '../services/api';
 import { styles } from './adminDashboard.styles';
 import { TABS, MAIN_NAV, DATA_NAV, fullName, PageHeader, Toast, FONT } from '../components/admin/adminShared';
 import ScheduleTab from '../components/admin/ScheduleTab';
-import HistoryTab from '../components/admin/HistoryTab';
 import RequestsTab from '../components/admin/RequestsTab';
 import TeacherPrefsTab from '../components/admin/TeacherPrefsTab';
 import WindowsTab from '../components/admin/WindowsTab';
@@ -60,20 +59,10 @@ export default function AdminDashboard() {
             <ScheduleTab
               jumpTarget={scheduleJump}
               onJumpHandled={() => setScheduleJump(null)}
-              onNavigateToHistory={() => setActiveTab('history')}
+              onRunSelected={() => showToast('המערכת הנבחרת עודכנה. ניתן לצפות בה כעת ולפרסם לצוות.', 5000)}
+              onRunDeleted={() => showToast('המערכת נמחקה מההיסטוריה.')}
             />
           </>
-        );
-      case 'history':
-        return (
-          <HistoryTab
-            title={title}
-            onRunSelected={() => {
-              setActiveTab('schedule');
-              showToast('המערכת הנבחרת עודכנה. ניתן לצפות בה כעת ולפרסם לצוות.', 5000);
-            }}
-            onRunDeleted={() => showToast('המערכת נמחקה מההיסטוריה.')}
-          />
         );
       case 'requests': return <RequestsTab title={title} onPendingCountChange={setPendingCount} />;
       case 'teacherprefs': return <TeacherPrefsTab title={title} onViewSchedule={viewTeacherSchedule} />;

@@ -8,6 +8,8 @@ import { exportSinglePDF, exportMultiPDF } from '../../utils/exportSchedulePDF';
 import { styles } from '../../pages/adminDashboard.styles';
 import { fmtDate, fmtDateTime } from '../../utils/format';
 import ScheduleEditor from './ScheduleEditor';
+import HistoryTab from './HistoryTab';
+import { Toggle } from './adminShared';
 
 const VIEW_TYPES = [
     { id: 'class', label: 'כיתה' },
@@ -22,6 +24,7 @@ const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 const ACTIVE_JOB_KEY = 'activeGenJob';
 const VIEW_STATE_KEY = 'scheduleViewState';
+const SHOW_SCORE_KEY = 'showViolationScore';
 
 function periodsUntil(startStr, endStr, breaks) {
     const toMin = s => { if (!s) return null; const p = String(s).split(':'); return (+p[0]) * 60 + (+p[1]); };
@@ -73,6 +76,27 @@ const VIOLATION_TYPE_LABELS = {
     early_finish: 'מורה אינו מסיים מוקדם כמבוקש',
     consecutive: 'שיעורי מורה לא רצופים',
     subject_distribution: 'אותו מקצוע מרוכז ביום אחד',
+};
+
+// נרמול טקסט לחיפוש: מתעלם מניקוד, מאחיד גרש/גרשיים ורווחים, ולא רגיש לאותיות גדולות.
+const normalizeSearch = (str) => String(str || '')
+    .replace(/[\u0591-\u05C7]/g, '')
+    .replace(/[׳`’‘]/g, "'")
+    .replace(/[״“”]/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+// הפרה תואמת אם כל מילה בחיפוש מופיעה בפרטי ההפרה, בשם סוג ההפרה או בחומרה שלה.
+const violationMatches = (v, query) => {
+    const words = normalizeSearch(query).split(' ').filter(Boolean);
+    if (words.length === 0) return true;
+    const haystack = normalizeSearch([
+        v.detail,
+        VIOLATION_TYPE_LABELS[v.type] || v.type,
+        v.severity === 'hard' ? 'קשיחה' : 'רכה',
+    ].join(' '));
+    return words.every(w => haystack.includes(w));
 };
 
 const extractGrade = (groupName) => {
@@ -165,7 +189,7 @@ const readViewState = () => {
     catch (e) { return {}; }
 };
 
-export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHistory }) {
+export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, onRunDeleted }) {
     const [entries, setEntries] = useState([]);
     const [runInfo, setRunInfo] = useState(null);
     const [generating, setGenerating] = useState(false);
@@ -183,6 +207,11 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
     const [confirmGenerateType, setConfirmGenerateType] = useState(null);
     const [schoolSettings, setSchoolSettings] = useState(null);
     const [editMode, setEditMode] = useState(false);
+    // עמוד פנימי בתוך הטאב: null = מערכת השעות, 'history' = היסטוריית מערכות
+    const [subPage, setSubPage] = useState(null);
+    const [moreOpen, setMoreOpen] = useState(false);
+    // הניקוד בחלון ההפרות מוסתר כברירת מחדל ומוצג רק למי שמבקש
+    const [showScore, setShowScore] = useState(() => localStorage.getItem(SHOW_SCORE_KEY) === '1');
 
     // מצב התצוגה נשמר מקומית, כך שמעבר בין טאבים או רענון של הדף מחזירים
     // את המשתמש/ת בדיוק למה שהיה פתוח.
@@ -243,6 +272,10 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
     useEffect(() => {
         localStorage.setItem(VIEW_STATE_KEY, JSON.stringify({ filterType, selectedValues, colorMode }));
     }, [filterType, selectedValues, colorMode]);
+
+    useEffect(() => {
+        localStorage.setItem(SHOW_SCORE_KEY, showScore ? '1' : '0');
+    }, [showScore]);
 
     useEffect(() => {
         if (jumpTarget) {
@@ -490,6 +523,21 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
         );
     }
 
+    if (subPage === 'history') {
+        return (
+            <>
+                <button onClick={() => setSubPage(null)} style={{ width: 'fit-content', display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', padding: 0, marginBottom: '14px', color: '#8a7a6e', fontSize: '14px', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif' }}>
+                    <i className="ti ti-chevron-right" aria-hidden="true"></i> חזרה למערכת השעות
+                </button>
+                <h2 style={{ fontSize: '20px', fontWeight: 400, color: '#4a3f35', margin: '0 0 20px 0' }}>היסטוריית מערכות</h2>
+                <HistoryTab
+                    onRunSelected={() => { setSubPage(null); loadSchedule(); if (onRunSelected) onRunSelected(); }}
+                    onRunDeleted={() => { if (onRunDeleted) onRunDeleted(); }}
+                />
+            </>
+        );
+    }
+
     return (
         <>
             <div style={{ marginBottom: '18px' }}>
@@ -538,12 +586,39 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                     <i className="ti ti-edit" aria-hidden="true"></i> עריכה ידנית
                 </button>
 
-                <button onClick={openViolations} disabled={!runInfo} style={{ ...styles.btnOutline, padding: '13px 22px', fontSize: '15px', opacity: !runInfo ? 0.5 : 1, cursor: !runInfo ? 'not-allowed' : 'pointer' }}>
-                    <i className="ti ti-alert-triangle" aria-hidden="true"></i> צפייה בהפרות
-                    {totalViolations > 0 && (
-                        <span style={{ marginRight: '4px', fontSize: '11px', backgroundColor: '#FAE8E8', color: '#c0705a', borderRadius: '10px', padding: '1px 8px' }}>{totalViolations}</span>
+                <div style={{ position: 'relative' }}>
+                    <button onClick={() => setMoreOpen(o => !o)} aria-haspopup="menu" aria-expanded={moreOpen} style={{ ...styles.btnOutline, position: 'relative', padding: '13px 22px', fontSize: '16px', cursor: 'pointer' }}>
+                        <i className="ti ti-layout-grid" aria-hidden="true"></i> אפשרויות נוספות <i className="ti ti-chevron-down" style={{ fontSize: '13px' }} aria-hidden="true"></i>
+                        {violationsSummary && violationsSummary.hard > 0 && (
+                            <span aria-hidden="true" style={{ position: 'absolute', top: '6px', left: '8px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#c0705a' }}></span>
+                        )}
+                    </button>
+
+                    {moreOpen && (
+                        <>
+                            <div onClick={() => setMoreOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 900 }} />
+                            <div role="menu" dir="rtl" style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 901, backgroundColor: '#fff', border: '1px solid #e2dacc', borderRadius: '12px', boxShadow: '0 8px 24px rgba(74,63,53,0.14)', width: '240px', padding: '8px' }}>
+                                <button
+                                    role="menuitem"
+                                    onClick={() => { if (!runInfo) return; setMoreOpen(false); openViolations(); }}
+                                    style={{ ...menuItemStyle(false), fontSize: '14px', padding: '11px 12px', opacity: !runInfo ? 0.5 : 1, cursor: !runInfo ? 'not-allowed' : 'pointer' }}
+                                >
+                                    <i className="ti ti-alert-triangle" aria-hidden="true"></i> צפייה בהפרות
+                                    {totalViolations > 0 && (
+                                        <span style={{ marginRight: 'auto', fontSize: '11px', backgroundColor: '#FAE8E8', color: '#c0705a', borderRadius: '10px', padding: '1px 8px' }}>{totalViolations}</span>
+                                    )}
+                                </button>
+                                <button
+                                    role="menuitem"
+                                    onClick={() => { setMoreOpen(false); setSubPage('history'); }}
+                                    style={{ ...menuItemStyle(false), fontSize: '14px', padding: '11px 12px' }}
+                                >
+                                    <i className="ti ti-history" aria-hidden="true"></i> היסטוריית מערכות
+                                </button>
+                            </div>
+                        </>
                     )}
-                </button>
+                </div>
             </div>
 
             {!runInfo ? (
@@ -558,7 +633,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                             <i className={`ti ${generating ? 'ti-loader' : 'ti-wand'}`} aria-hidden="true"></i>
                             {generating ? 'בתהליך יצירה…' : 'יצירת מערכת חדשה'}
                         </button>
-                        <button onClick={onNavigateToHistory} style={{ width: 'fit-content', background: 'none', border: 'none', color: '#8a9e78', fontSize: '13px', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif', textDecoration: 'underline' }}>
+                        <button onClick={() => setSubPage('history')} style={{ width: 'fit-content', background: 'none', border: 'none', color: '#8a9e78', fontSize: '13px', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif', textDecoration: 'underline' }}>
                             פתיחת מערכת קיימת
                         </button>
                     </div>
@@ -877,7 +952,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                             </div>
                         ) : (() => {
                             const q = violationSearch.trim();
-                            const filtered = q ? violations.filter(v => (v.detail || '').includes(q)) : violations;
+                            const filtered = q ? violations.filter(v => violationMatches(v, q)) : violations;
                             const groups = {};
                             filtered.forEach(v => { (groups[v.type] = groups[v.type] || []).push(v); });
                             const groupKeys = Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length);
@@ -896,6 +971,16 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                                             </button>
                                         )}
                                     </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                                        <Toggle on={showScore} onClick={() => setShowScore(s => !s)} label="הצגת ניקוד" />
+                                        <span style={{ fontSize: '13px', color: '#4a3f35' }}>הצגת ניקוד</span>
+                                    </div>
+                                    {showScore && (
+                                        <div style={{ fontSize: '13px', color: '#4a3f35', backgroundColor: '#FAF7F2', border: '1px solid #ece7dd', borderRadius: '8px', padding: '10px 12px', marginBottom: '12px', lineHeight: 1.6 }}>
+                                            <strong>ניקוד המערכת: {(runInfo?.score ?? violations.reduce((sum, v) => sum + (v.penalty || 0), 0)).toLocaleString()}</strong>
+                                            {' · '}כל הפרה מוסיפה קנס לניקוד. ככל שהניקוד נמוך יותר, המערכת טובה יותר.
+                                        </div>
+                                    )}
                                     <div style={{ fontSize: '13px', color: '#8a7a6e', marginBottom: '14px' }}>
                                         {q ? `${filtered.length} מתוך ${violations.length} הפרות` : `סה״כ ${violations.length} הפרות`} · קשיחות: {filtered.filter(v => v.severity === 'hard').length} · רכות: {filtered.filter(v => v.severity === 'soft').length}
                                     </div>
@@ -903,20 +988,21 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                                         <div style={{ textAlign: 'center', color: '#c8baa6', padding: '20px', fontSize: '13px' }}>אין הפרות שתואמות את החיפוש.</div>
                                     ) : groupKeys.map(type => {
                                         const rows = groups[type];
-                                        const isOpen = !!openViolationGroups[type];
+                                        // בזמן חיפוש הקבוצות נפתחות אוטומטית כדי שהתוצאות ייראו מיד
+                                        const isOpen = q ? openViolationGroups[type] !== false : !!openViolationGroups[type];
                                         const totalPenalty = rows.reduce((s, v) => s + (v.penalty || 0), 0);
                                         const anyHard = rows.some(v => v.severity === 'hard');
                                         return (
                                             <div key={type} style={{ border: '1px solid #ece7dd', borderRadius: '10px', marginBottom: '10px', overflow: 'hidden' }}>
                                                 <button
-                                                    onClick={() => setOpenViolationGroups(p => ({ ...p, [type]: !p[type] }))}
+                                                    onClick={() => setOpenViolationGroups(p => ({ ...p, [type]: !isOpen }))}
                                                     style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', background: '#FAF7F2', border: 'none', cursor: 'pointer', fontFamily: 'Varela Round, sans-serif', textAlign: 'right' }}
                                                 >
                                                     <i className={`ti ${isOpen ? 'ti-chevron-down' : 'ti-chevron-left'}`} style={{ color: '#8a7a6e' }} aria-hidden="true"></i>
                                                     <span style={{ flexShrink: 0, width: '9px', height: '9px', borderRadius: '50%', backgroundColor: anyHard ? '#c0705a' : '#d8bb3a' }}></span>
                                                     <span style={{ flex: 1, fontSize: '14px', color: '#4a3f35', fontWeight: 700 }}>{VIOLATION_TYPE_LABELS[type] || type}</span>
                                                     <span style={{ flexShrink: 0, fontSize: '12px', color: '#8a7a6e', backgroundColor: '#ece7dd', borderRadius: '10px', padding: '2px 9px' }}>{rows.length}</span>
-                                                    <span style={{ flexShrink: 0, fontSize: '12px', color: '#8a7a6e', fontWeight: 600, minWidth: '54px', textAlign: 'left' }}>+{totalPenalty.toLocaleString()}</span>
+                                                    {showScore && <span style={{ flexShrink: 0, fontSize: '12px', color: '#8a7a6e', fontWeight: 600, minWidth: '54px', textAlign: 'left' }}>+{totalPenalty.toLocaleString()}</span>}
                                                 </button>
                                                 {isOpen && (
                                                     <div style={{ padding: '4px 14px 8px' }}>
@@ -926,7 +1012,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onNavigateToHis
                                                                     {v.severity === 'hard' ? 'קשיחה' : 'רכה'}
                                                                 </span>
                                                                 <span style={{ flex: 1, fontSize: '13px', color: '#4a3f35' }}>{v.detail}</span>
-                                                                <span style={{ flexShrink: 0, fontSize: '13px', color: '#8a7a6e', fontWeight: 600 }}>+{v.penalty.toLocaleString()}</span>
+                                                                {showScore && <span style={{ flexShrink: 0, fontSize: '13px', color: '#8a7a6e', fontWeight: 600 }}>+{v.penalty.toLocaleString()}</span>}
                                                             </div>
                                                         ))}
                                                     </div>

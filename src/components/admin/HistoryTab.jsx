@@ -4,12 +4,12 @@ import { styles } from '../../pages/adminDashboard.styles';
 import { fmtDate, fmtDateTime } from '../../utils/format';
 import { formatAlgo, PageHeader, ConfirmDialog, Modal, PrimaryButton, FONT, DAYS, DAY_ORDER, HOURS, GridTable } from './adminShared';
 
-const MAX_RUNS = 20;
+const PAGE_SIZE = 5;
 
 export default function HistoryTab({ title, onRunSelected, onRunDeleted }) {
   const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showAll, setShowAll] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [viewing, setViewing] = useState(null);
   const [confirmSelect, setConfirmSelect] = useState(null);
   const [selecting, setSelecting] = useState(false);
@@ -54,7 +54,7 @@ export default function HistoryTab({ title, onRunSelected, onRunDeleted }) {
     setNoteEdit(null);
   };
 
-  const visibleRuns = showAll ? runs : runs.slice(0, MAX_RUNS);
+  const visibleRuns = runs.slice(0, visibleCount);
 
   const rows = visibleRuns.map(run => {
     const deletable = !run.is_selected && !run.is_published;
@@ -90,16 +90,18 @@ export default function HistoryTab({ title, onRunSelected, onRunDeleted }) {
     };
   });
 
-  const footer = runs.length > MAX_RUNS ? (
+  const footer = runs.length > PAGE_SIZE ? (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '14px', fontSize: '13px', color: '#8a7a6e' }}>
-      <span>{showAll ? `מוצגות כל ${runs.length} המערכות` : `מוצגות ${MAX_RUNS} מתוך ${runs.length}`}</span>
-      <button onClick={() => setShowAll(s => !s)} style={styles.btnOutline}>{showAll ? 'הצג פחות' : 'הצג הכל'}</button>
+      <span>{`מוצגות ${visibleRuns.length} מתוך ${runs.length}`}</span>
+      {visibleRuns.length < runs.length && (
+        <button onClick={() => setVisibleCount(c => c + PAGE_SIZE)} style={styles.btnOutline}>הצגת עוד</button>
+      )}
     </div>
   ) : null;
 
   return (
     <>
-      <PageHeader title={title} />
+      {title && <PageHeader title={title} />}
 
       {loading ? (
         <div style={{ ...styles.card, textAlign: 'center', color: '#c8baa6', padding: '40px' }}>טוען…</div>

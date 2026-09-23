@@ -3,7 +3,6 @@ import { styles } from '../../pages/adminDashboard.styles';
 
 export const TABS = [
   { id: 'schedule', label: 'מערכת שעות', icon: 'ti-calendar' },
-  { id: 'history', label: 'היסטוריית מערכות', icon: 'ti-history' },
   { id: 'requests', label: 'פניות מורים', icon: 'ti-message' },
   { id: 'teacherprefs', label: 'העדפות מורים', icon: 'ti-clipboard-text' },
   { id: 'windows', label: 'חלונות הגשה', icon: 'ti-calendar-event' },
@@ -16,7 +15,7 @@ export const TABS = [
 ];
 
 // Sidebar groups (a divider is drawn between them)
-export const MAIN_NAV = ['schedule', 'history', 'requests', 'teacherprefs', 'windows', 'notifications', 'school'];
+export const MAIN_NAV = ['schedule', 'requests', 'teacherprefs', 'windows', 'notifications', 'school'];
 export const DATA_NAV = ['teachers', 'rooms', 'subjects', 'groups'];
 
 export const SCHOOL_TABS = [
