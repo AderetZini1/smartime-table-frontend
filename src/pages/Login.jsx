@@ -4,6 +4,7 @@ import { login, getMe, login8001 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useGoogleOAuth } from '@react-oauth/google';
 import axios from 'axios';
+import LoadingScreen from '../components/LoadingScreen';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -14,6 +15,14 @@ export default function Login() {
   const navigate = useNavigate();
   const { clientId } = useGoogleOAuth(); // אותו Client ID שמוגדר ב-GoogleOAuthProvider
   const googleHandled = useRef(false);
+
+  // Keep the splash on screen long enough for the logo animation to finish,
+  // even when the server answers immediately.
+  const MIN_SPLASH_MS = 2000;
+  const holdSplash = (startedAt) => {
+    const left = MIN_SPLASH_MS - (Date.now() - startedAt);
+    return left > 0 ? new Promise((r) => setTimeout(r, left)) : Promise.resolve();
+  };
 
   // Fresh login → land on the default page (clear the remembered admin tab).
   // Re-login after a session expiry → keep it, so the user returns where they were.
@@ -38,6 +47,7 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
+    const startedAt = Date.now();
     try {
       const res = await login(username, password);
       const token = res.data.access_token;
@@ -53,6 +63,7 @@ export default function Login() {
       }
 
       applyPostLoginTab();
+      await holdSplash(startedAt);
       if (meRes.data.is_admin) {
         navigate('/admin');
       } else {
@@ -68,11 +79,13 @@ export default function Login() {
   const handleGoogleSuccess = async (credentialResponse) => {
     setError('');
     setLoading(true);
+    const startedAt = Date.now();
     try {
       const res = await axios.post('/auth/google-oauth/', {
         credential: credentialResponse.credential,
       });
       const { access_token, ...userData } = res.data;
+      await holdSplash(startedAt);
       handleAfterLogin(access_token, userData);
     } catch (err) {
       const msg = err?.response?.data?.detail;
@@ -136,6 +149,8 @@ export default function Login() {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#FAF7F2', display: 'flex', alignItems: 'center', justifyContent: 'center' }} dir="rtl">
+      {loading && <LoadingScreen tagline="מתחבר..." cycle="3s" />}
+
       <div style={{ backgroundColor: '#fff', borderRadius: '24px', border: '1px solid #e2dacc', padding: '48px 64px', width: '100%', maxWidth: '520px', boxSizing: 'border-box' }}>
 
         {/* לוגו */}

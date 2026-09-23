@@ -10,6 +10,7 @@ import { fmtDate, fmtDateTime } from '../../utils/format';
 import ScheduleEditor from './ScheduleEditor';
 import HistoryTab from './HistoryTab';
 import { Toggle } from './adminShared';
+import LoadingScreen from '../LoadingScreen';
 
 const VIEW_TYPES = [
     { id: 'class', label: 'כיתה' },
@@ -540,6 +541,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
 
     return (
         <>
+            {generating && <LoadingScreen floating offset="280px" tagline="יוצר מערכת שעות" />}
             <div style={{ marginBottom: '18px' }}>
                 <div style={{ fontSize: '16px', color: '#8a7a6e' }}>מערכת השעות הפעילה של בית הספר</div>
                 <div style={{ fontSize: '15px', color: '#8a7a6e', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
