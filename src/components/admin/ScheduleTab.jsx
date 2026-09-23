@@ -315,7 +315,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
         setGenError('');
         setGenerating(true);
         try {
-            const start = await runGeneration();
+            const start = await runMemeticGeneration();
             trackJob(start.data.job_id);
         } catch (e) {
             setGenerating(false);
