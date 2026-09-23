@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login, getMe, login8001 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { GoogleLogin } from '@react-oauth/google';
+import { useGoogleOAuth } from '@react-oauth/google';
 import axios from 'axios';
 
 export default function Login() {
@@ -12,6 +12,8 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const { loginUser } = useAuth();
   const navigate = useNavigate();
+  const { clientId } = useGoogleOAuth(); // אותו Client ID שמוגדר ב-GoogleOAuthProvider
+  const googleHandled = useRef(false);
 
   // Fresh login → land on the default page (clear the remembered admin tab).
   // Re-login after a session expiry → keep it, so the user returns where they were.
@@ -20,7 +22,7 @@ export default function Login() {
     localStorage.removeItem('reloginPending');
     if (!wasRelogin) localStorage.removeItem('adminActiveTab');
   };
-  
+
   const handleAfterLogin = (token, userData) => {
     localStorage.setItem('token', token);
     loginUser(token, userData);
@@ -80,15 +82,67 @@ export default function Login() {
     }
   };
 
+  // מעבר מלא לעמוד הכניסה של Google (בלי חלונית קופצת)
+  const startGoogleLogin = () => {
+    const nonce = crypto.randomUUID();
+    const state = crypto.randomUUID();
+    sessionStorage.setItem('googleNonce', nonce);
+    sessionStorage.setItem('googleState', state);
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: `${window.location.origin}/login`,
+      response_type: 'id_token',
+      scope: 'openid email profile',
+      prompt: 'select_account',
+      nonce,
+      state,
+    });
+    window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+  };
+
+  // חזרה מ-Google: הטוקן מגיע בכתובת (#id_token=...)
+  useEffect(() => {
+    if (googleHandled.current) return;
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    const idToken = hash.get('id_token');
+    const googleError = hash.get('error');
+    if (!idToken && !googleError) return;
+    googleHandled.current = true;
+    window.history.replaceState(null, '', window.location.pathname);
+
+    const expectedState = sessionStorage.getItem('googleState');
+    const expectedNonce = sessionStorage.getItem('googleNonce');
+    sessionStorage.removeItem('googleState');
+    sessionStorage.removeItem('googleNonce');
+
+    if (googleError) {
+      if (googleError !== 'access_denied') setError('שגיאה בהתחברות עם גוגל');
+      return;
+    }
+    try {
+      const b64 = idToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(b64));
+      if (hash.get('state') !== expectedState || payload.nonce !== expectedNonce) {
+        setError('שגיאה בהתחברות עם גוגל');
+        return;
+      }
+    } catch {
+      setError('שגיאה בהתחברות עם גוגל');
+      return;
+    }
+    handleGoogleSuccess({ credential: idToken });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#FAF7F2', display: 'flex', alignItems: 'center', justifyContent: 'center' }} dir="rtl">
-      <div style={{ backgroundColor: '#fff', borderRadius: '20px', border: '1px solid #e2dacc', padding: '48px', width: '100%', maxWidth: '420px' }}>
+      <div style={{ backgroundColor: '#fff', borderRadius: '24px', border: '1px solid #e2dacc', padding: '48px 64px', width: '100%', maxWidth: '520px', boxSizing: 'border-box' }}>
 
         {/* לוגו */}
-        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          <div style={{ fontSize: '13px', letterSpacing: '0.15em', color: '#c8baa6', marginBottom: '8px' }}>SMARTIME</div>
-          <h1 style={{ fontSize: '28px', color: '#4a3f35', margin: 0 }}>מערכת שעות חכמה</h1>
-          <div style={{ width: '40px', height: '1px', backgroundColor: '#8a9e78', margin: '16px auto 0' }}></div>
+        <div style={{ textAlign: 'center', marginBottom: '36px' }}>
+          <img src="/favicon.ico" alt="Smartime" style={{ width: '64px', height: '64px', display: 'block', margin: '0 auto 16px' }} />
+          <h1 style={{ fontSize: '34px', fontWeight: 400, color: '#4a3f35', margin: 0 }}>מערכת שעות חכמה</h1>
+          <div style={{ width: '48px', height: '1px', backgroundColor: '#8a9e78', margin: '18px auto 0' }}></div>
         </div>
 
         {error && (
@@ -96,59 +150,65 @@ export default function Login() {
         )}
 
         {/* כפתור גוגל */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
-          <GoogleLogin
-            onSuccess={handleGoogleSuccess}
-            onError={() => setError('שגיאה בהתחברות עם גוגל')}
-            text="signin_with"
-            locale="he"
-            shape="rectangular"
-            theme="outline"
-            size="large"
-            width="324"
-          />
-        </div>
+        <button
+          type="button"
+          onClick={startGoogleLogin}
+          disabled={loading}
+          style={{
+            width: '100%', minHeight: '50px', padding: '13px', backgroundColor: '#FAF7F2',
+            color: '#4a3f35', border: '1px solid #e2dacc', borderRadius: '999px',
+            fontSize: '16px', fontFamily: 'inherit',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+            cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1,
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.150 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+          </svg>
+          <span>כניסה עם Google</span>
+        </button>
 
         {/* מפריד */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '20px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', margin: '26px 0' }}>
           <div style={{ flex: 1, height: '1px', backgroundColor: '#e2dacc' }}></div>
-          <span style={{ fontSize: '12px', color: '#c8baa6', whiteSpace: 'nowrap' }}>או התחברות עם תעודת זהות</span>
+          <span style={{ fontSize: '13px', color: '#a8957c', whiteSpace: 'nowrap' }}>או התחברות עם תעודת זהות</span>
           <div style={{ flex: 1, height: '1px', backgroundColor: '#e2dacc' }}></div>
         </div>
 
         {/* טופס קיים — ללא שינוי */}
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontSize: '12px', color: '#8a7a6e', marginBottom: '8px', letterSpacing: '0.05em' }}>
+            <label style={{ display: 'block', fontSize: '14px', color: '#7a6a5e', marginBottom: '8px' }}>
               תעודת זהות
             </label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="הכנס תעודת זהות"
               required
               style={{
-                width: '100%', padding: '12px 16px', border: '1px solid #e2dacc',
-                borderRadius: '10px', fontSize: '14px', color: '#4a3f35',
+                width: '100%', padding: '14px 18px', border: '1px solid #e2dacc',
+                borderRadius: '12px', fontSize: '15px', fontFamily: 'inherit', color: '#4a3f35',
                 backgroundColor: '#FAF7F2', outline: 'none', boxSizing: 'border-box'
               }}
             />
           </div>
 
-          <div style={{ marginBottom: '28px' }}>
-            <label style={{ display: 'block', fontSize: '12px', color: '#8a7a6e', marginBottom: '8px', letterSpacing: '0.05em' }}>
+          <div style={{ marginBottom: '30px' }}>
+            <label style={{ display: 'block', fontSize: '14px', color: '#7a6a5e', marginBottom: '8px' }}>
               סיסמה
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="הכנס סיסמה"
               required
               style={{
-                width: '100%', padding: '12px 16px', border: '1px solid #e2dacc',
-                borderRadius: '10px', fontSize: '14px', color: '#4a3f35',
+                width: '100%', padding: '14px 18px', border: '1px solid #e2dacc',
+                borderRadius: '12px', fontSize: '15px', fontFamily: 'inherit', color: '#4a3f35',
                 backgroundColor: '#FAF7F2', outline: 'none', boxSizing: 'border-box'
               }}
             />
@@ -158,9 +218,9 @@ export default function Login() {
             type="submit"
             disabled={loading}
             style={{
-              width: '100%', padding: '13px', backgroundColor: '#8a9e78',
-              color: '#fff', border: 'none', borderRadius: '10px',
-              fontSize: '15px', cursor: loading ? 'not-allowed' : 'pointer',
+              display: 'block', margin: '0 auto', minHeight: '50px', padding: '13px 56px', backgroundColor: '#6f8560',
+              color: '#fff', border: 'none', borderRadius: '999px',
+              fontSize: '16px', fontFamily: 'inherit', cursor: loading ? 'not-allowed' : 'pointer',
               opacity: loading ? 0.7 : 1, transition: 'opacity 0.2s'
             }}
           >
@@ -168,11 +228,11 @@ export default function Login() {
           </button>
         </form>
 
-        <div style={{ textAlign: 'center', marginTop: '20px' }}>
+        <div style={{ textAlign: 'center', marginTop: '22px' }}>
           <button
             type="button"
             onClick={() => navigate('/forgot-password')}
-            style={{ background: 'none', border: 'none', color: '#8a7a6e', fontSize: '13px', cursor: 'pointer' }}
+            style={{ background: 'none', border: 'none', color: '#8a7a6e', fontSize: '14px', fontFamily: 'inherit', cursor: 'pointer' }}
           >
             שכחת סיסמה?
           </button>
