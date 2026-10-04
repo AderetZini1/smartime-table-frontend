@@ -222,7 +222,7 @@ export function ConfirmDeleteModal({ name, onConfirm, onCancel }) {
         )}
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
           <button onClick={onCancel} disabled={busy} style={styles.btnOutline}>ביטול</button>
-          <button onClick={confirm} disabled={busy} style={{ ...styles.btnAdd, backgroundColor: '#c0705a', opacity: busy ? 0.6 : 1 }}>{busy ? 'מוחק…' : 'מחק'}</button>
+          <button onClick={confirm} disabled={busy} style={{ ...styles.btnAdd, backgroundColor: '#c0705a', opacity: busy ? 0.6 : 1 }}>{busy ? 'מוחק…' : 'מחיקה'}</button>
         </div>
       </div>
     </div>

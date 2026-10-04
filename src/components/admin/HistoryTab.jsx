@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { getScheduleRuns, selectScheduleRun, deleteScheduleRun, updateScheduleRunNote, getScheduleRunEntries } from '../../services/api';
 import { styles } from '../../pages/adminDashboard.styles';
 import { fmtDate, fmtDateTime } from '../../utils/format';
-import { formatAlgo, PageHeader, ConfirmDialog, Modal, PrimaryButton, FONT, DAYS, DAY_ORDER, HOURS, GridTable } from './adminShared';
+import { formatAlgo, PageHeader, ConfirmDialog, Modal, PrimaryButton, FONT, DAYS, DAY_ORDER, HOURS, GridTable, Toggle, TABLE_WIDTH } from './adminShared';
 
 const PAGE_SIZE = 5;
+const SHOW_TECH_KEY = 'historyShowTech';
 
 export default function HistoryTab({ title, onRunSelected, onRunDeleted }) {
   const [runs, setRuns] = useState([]);
@@ -17,10 +18,16 @@ export default function HistoryTab({ title, onRunSelected, onRunDeleted }) {
   const [deleting, setDeleting] = useState(false);
   const [noteView, setNoteView] = useState(null);
   const [noteEdit, setNoteEdit] = useState(null);
+  // ציון ואלגוריתם מוסתרים כברירת מחדל: מעניינים את הצוות הטכני, לא את המנהל
+  const [showTech, setShowTech] = useState(() => localStorage.getItem(SHOW_TECH_KEY) === '1');
 
   useEffect(() => {
     getScheduleRuns().then(r => setRuns(r.data)).catch(() => { }).finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem(SHOW_TECH_KEY, showTech ? '1' : '0');
+  }, [showTech]);
 
   const handleSelect = async () => {
     setSelecting(true);
@@ -64,10 +71,9 @@ export default function HistoryTab({ title, onRunSelected, onRunDeleted }) {
       onRowClick: () => setViewing(run),
       cells: [
         <span style={{ color: '#8a7a6e' }}>{run.run_at ? fmtDate(run.run_at) : '—'}</span>,
-        formatAlgo(run.algorithm),
-        run.score ?? '—',
         <RunStatus run={run} />,
         <NoteButton run={run} onView={() => setNoteView(run)} onAdd={() => setNoteEdit(run)} />,
+        ...(showTech ? [formatAlgo(run.algorithm), run.score ?? '—'] : []),
       ],
       actions: [
         { label: 'צפייה במערכת', icon: 'ti-eye', onClick: () => setViewing(run) },
@@ -103,11 +109,24 @@ export default function HistoryTab({ title, onRunSelected, onRunDeleted }) {
     <>
       {title && <PageHeader title={title} />}
 
+      <div style={{ width: TABLE_WIDTH, maxWidth: '100%', margin: '0 auto 12px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+        <Toggle on={showTech} onClick={() => setShowTech(s => !s)} label="הצגת פרטים טכניים" />
+        <span style={{ fontSize: '13px', color: '#4a3f35' }}>הצגת פרטים טכניים</span>
+        {showTech && (
+          <span style={{ fontSize: '12px', color: '#8a7a6e' }}>· ככל שהציון נמוך יותר, המערכת טובה יותר</span>
+        )}
+      </div>
+
       {loading ? (
         <div style={{ ...styles.card, textAlign: 'center', color: '#c8baa6', padding: '40px' }}>טוען…</div>
       ) : (
         <GridTable
-          headers={[{ label: 'תאריך', weight: 1.2 }, { label: 'אלגוריתם', weight: 1.2 }, { label: 'ציון', weight: 0.8 }, { label: 'סטטוס', weight: 1.4 }, { label: 'הערות', weight: 1.2 }]}
+          headers={[
+            { label: 'תאריך', weight: 1.2 },
+            { label: 'סטטוס', weight: 1.4 },
+            { label: 'הערות', weight: 1.2 },
+            ...(showTech ? [{ label: 'אלגוריתם', weight: 1.2 }, { label: 'ציון', weight: 0.8 }] : []),
+          ]}
           rows={rows}
           emptyText="אין מערכות שמורות עדיין"
           footer={footer}
@@ -117,7 +136,7 @@ export default function HistoryTab({ title, onRunSelected, onRunDeleted }) {
       {confirmDelete && (
         <ConfirmDialog
           message="למחוק מערכת זו מההיסטוריה? לא ניתן לשחזר פעולה זו."
-          confirmLabel="מחק"
+          confirmLabel="מחיקה"
           busyLabel="מוחק…"
           busy={deleting}
           danger
@@ -138,7 +157,7 @@ export default function HistoryTab({ title, onRunSelected, onRunDeleted }) {
         />
       )}
 
-      {viewing && <RunViewerModal run={viewing} onClose={() => setViewing(null)} />}
+      {viewing && <RunViewerModal run={viewing} showTech={showTech} onClose={() => setViewing(null)} />}
 
       {noteView && (
         <NoteViewModal
@@ -172,13 +191,13 @@ function NoteButton({ run, onView, onAdd }) {
   if (run.admin_note) {
     return (
       <button onClick={handle(onView)} title={run.admin_note} style={{ backgroundColor: '#EDF4E8', border: '1px solid #cfe0c2', color: '#4a7c3f', borderRadius: '7px', padding: '5px 12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px', fontFamily: FONT }}>
-        <i className="ti ti-note" aria-hidden="true"></i> צפה בהערה
+        <i className="ti ti-note" aria-hidden="true"></i> צפייה בהערה
       </button>
     );
   }
   return (
     <button onClick={handle(onAdd)} style={{ backgroundColor: 'transparent', border: '1px dashed #d8d0c4', color: '#c8baa6', borderRadius: '7px', padding: '5px 12px', fontSize: '12px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px', fontFamily: FONT }}>
-      <i className="ti ti-plus" aria-hidden="true"></i> הוסף הערה
+      <i className="ti ti-plus" aria-hidden="true"></i> הוספת הערה
     </button>
   );
 }
@@ -189,9 +208,9 @@ function NoteViewModal({ run, onClose, onEdit }) {
       <p style={{ fontSize: '14px', color: '#4a3f35', lineHeight: 1.6, marginBottom: '26px', overflowWrap: 'anywhere' }}>{run.admin_note}</p>
       <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-start' }}>
         <button onClick={onEdit} style={styles.btnOutline}>
-          <i className="ti ti-pencil" aria-hidden="true"></i> ערוך
+          <i className="ti ti-pencil" aria-hidden="true"></i> עריכה
         </button>
-        <button onClick={onClose} style={styles.btnOutline}>סגור</button>
+        <button onClick={onClose} style={styles.btnOutline}>סגירה</button>
       </div>
     </Modal>
   );
@@ -227,7 +246,7 @@ function NoteEditModal({ run, onClose, onSaved }) {
       />
       <div style={{ fontSize: '11px', color: '#c8baa6', textAlign: 'left', marginTop: '4px' }}>{draft.length}/{NOTE_MAX}</div>
       <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-start', marginTop: '18px' }}>
-        <PrimaryButton onClick={save} busy={saving} style={{ padding: '9px 20px', fontSize: '14px', fontFamily: FONT }}>שמור</PrimaryButton>
+        <PrimaryButton onClick={save} busy={saving} style={{ padding: '9px 20px', fontSize: '14px', fontFamily: FONT }}>שמירה</PrimaryButton>
         <button onClick={onClose} disabled={saving} style={styles.btnOutline}>ביטול</button>
       </div>
     </Modal>
@@ -239,7 +258,7 @@ const classNames = (entries) =>
 
 const thStyle = { padding: '8px', border: '1px solid #e2dacc', backgroundColor: '#EDF4E8', fontSize: '12px', color: '#4a3f35' };
 
-function RunViewerModal({ run, onClose }) {
+function RunViewerModal({ run, showTech, onClose }) {
   const [entries, setEntries] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -259,7 +278,7 @@ function RunViewerModal({ run, onClose }) {
   return (
     <Modal
       title="צפייה במערכת (לקריאה בלבד)"
-      subtitle={`${fmtDateTime(run.run_at)} · ציון ${run.score ?? '—'}`}
+      subtitle={showTech ? `${fmtDateTime(run.run_at)} · ציון ${run.score ?? '—'}` : fmtDateTime(run.run_at)}
       width="820px"
       padding="28px"
       overlay={0.25}

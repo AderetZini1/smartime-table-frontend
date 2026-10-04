@@ -7,7 +7,6 @@ import { exportSingleSchedule, exportMultiSchedule } from '../../utils/exportSch
 import { exportSinglePDF, exportMultiPDF } from '../../utils/exportSchedulePDF';
 import { styles } from '../../pages/adminDashboard.styles';
 import { fmtDate, fmtDateTime } from '../../utils/format';
-import ScheduleEditor from './ScheduleEditor';
 import HistoryTab from './HistoryTab';
 import { Toggle } from './adminShared';
 import LoadingScreen from '../LoadingScreen';
@@ -22,6 +21,7 @@ const VIEW_TYPES = [
 const DAY_NAMES_BY_NUM = { 1: 'ראשון', 2: 'שני', 3: 'שלישי', 4: 'רביעי', 5: 'חמישי', 6: 'שישי' };
 const DAY_ORDER = [1, 2, 3, 4, 5, 6];
 const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
+const GRADE_LETTERS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו'];
 
 const ACTIVE_JOB_KEY = 'activeGenJob';
 const VIEW_STATE_KEY = 'scheduleViewState';
@@ -35,6 +35,16 @@ function periodsUntil(startStr, endStr, breaks) {
     let t = start, n = 0;
     while (t + 45 <= end) { n += 1; t += 45; const br = sorted.find(b => b.after_lesson === n); if (br && t + br.duration_minutes + 45 <= end) t += br.duration_minutes; }
     return n;
+}
+
+// שעת הסיום של שכבה ביום מסוים, לפי הגדרות המוסד.
+// grade = null (תצוגת מורה / מקצוע, שמערבבות שכבות) או שכבה בלי שעה מוגדרת → השכבה שמסיימת הכי מאוחר.
+function endTimeFor(settings, grade, day) {
+    if (day === 6) return settings.friday_end_time;
+    const ends = settings.grade_end_times || {};
+    if (grade && ends[String(grade)]) return ends[String(grade)];
+    const all = Object.values(ends).filter(Boolean).sort();
+    return all[all.length - 1];
 }
 
 const DIM_LABEL = { class: 'כיתה', teacher: 'מורה', subject: 'מקצוע', grade: 'שכבה' };
@@ -207,7 +217,6 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
     const [showPublishConfirm, setShowPublishConfirm] = useState(false);
     const [confirmGenerateType, setConfirmGenerateType] = useState(null);
     const [schoolSettings, setSchoolSettings] = useState(null);
-    const [editMode, setEditMode] = useState(false);
     // עמוד פנימי בתוך הטאב: null = מערכת השעות, 'history' = היסטוריית מערכות
     const [subPage, setSubPage] = useState(null);
     const [moreOpen, setMoreOpen] = useState(false);
@@ -422,31 +431,44 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
     const activeDays = schoolSettings?.active_days || DAY_ORDER;
     const visibleDays = DAY_ORDER.filter(d => activeDays.includes(d));
 
-    // מספר השיעורים בפועל לכל יום — פעם אחת, במקום חישוב חוזר לכל משבצת.
-    const maxPeriodByDay = useMemo(() => {
+    // מספר השיעורים בפועל לכל שכבה ולכל יום, לפי שעת הסיום של אותו יום.
+    // המפתח הוא "שכבה-יום"; שכבה null = תצוגת מורה / מקצוע.
+    const periodsMap = useMemo(() => {
         const map = {};
-        DAY_ORDER.forEach(day => {
-            if (!schoolSettings) { map[day] = HOURS.length; return; }
-            let end;
-            if (day === 6) end = schoolSettings.friday_end_time;
-            else {
-                const ends = Object.values(schoolSettings.grade_end_times || {}).filter(Boolean).sort();
-                end = ends[ends.length - 1];
-            }
-            const n = periodsUntil(schoolSettings.start_time, end, schoolSettings.breaks || []);
-            map[day] = n ? Math.min(n, HOURS.length) : HOURS.length;
+        [null, 1, 2, 3, 4, 5, 6].forEach(grade => {
+            DAY_ORDER.forEach(day => {
+                const n = schoolSettings
+                    ? periodsUntil(schoolSettings.start_time, endTimeFor(schoolSettings, grade, day), schoolSettings.breaks || [])
+                    : null;
+                map[`${grade}-${day}`] = n ? Math.min(n, HOURS.length) : HOURS.length;
+            });
         });
         return map;
     }, [schoolSettings]);
 
-    // מציגים רק שורות שקיימות לפחות ביום אחד, במקום שורות מפוספסות עד 8.
-    const visibleHours = useMemo(() => {
-        const max = visibleDays.reduce((m, d) => Math.max(m, maxPeriodByDay[d] || 0), 0);
-        return HOURS.filter(h => h <= (max || HOURS.length));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [maxPeriodByDay, visibleDays.join(',')]);
+    // השכבה של הלוח המוצג: בתצוגת כיתה לפי שם הכיתה, בתצוגת שכבה לפי האות.
+    const gradeOf = (val) => {
+        const letter = filterType === 'class' ? extractGrade(val) : filterType === 'grade' ? val : null;
+        const idx = GRADE_LETTERS.indexOf(letter);
+        return idx >= 0 ? idx + 1 : null;
+    };
 
-    const naCell = (day, hour) => hour > (maxPeriodByDay[day] || HOURS.length);
+    const periodsFor = (val, day) => periodsMap[`${gradeOf(val)}-${day}`] || HOURS.length;
+
+    // השורות של כל לוח: עד השיעור האחרון שקיים באחד הימים לפי שעות הסיום,
+    // ותמיד גם עד השיעור האחרון שמשובץ בפועל — כך ששיעור לא יוסתר לעולם.
+    const visibleHoursFor = (val) => {
+        const bySettings = visibleDays.reduce((m, d) => Math.max(m, periodsFor(val, d)), 0);
+        let byEntries = 0;
+        cellMaps.get(val)?.forEach((list, key) => {
+            const [d, h] = key.split('-').map(Number);
+            if (visibleDays.includes(d)) byEntries = Math.max(byEntries, h);
+        });
+        const max = Math.max(bySettings, byEntries);
+        return HOURS.filter(h => h <= (max || HOURS.length));
+    };
+
+    const naCell = (val, day, hour) => hour > periodsFor(val, day);
 
     const showColorControl = filterType === 'class' || filterType === 'grade';
     const effectiveColorMode = FORCED_COLOR_MODE[filterType] || colorMode;
@@ -500,17 +522,6 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
 
     const today = todayAppDay();
     const totalViolations = violationsSummary ? violationsSummary.hard + violationsSummary.soft : 0;
-
-    if (editMode) {
-        return (
-            <ScheduleEditor
-                initialEntries={entries}
-                runId={runInfo?.id}
-                onFinish={() => { setEditMode(false); loadSchedule(); }}
-                onCancel={() => setEditMode(false)}
-            />
-        );
-    }
 
     if (subPage === 'history') {
         return (
@@ -566,10 +577,6 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
 
                 <button onClick={() => requestGenerate('new')} disabled={generating} style={{ ...styles.btnOutline, padding: '13px 24px', fontSize: '16px', opacity: generating ? 0.5 : 1, cursor: generating ? 'not-allowed' : 'pointer' }}>
                     <i className={`ti ${generating ? 'ti-loader' : 'ti-wand'}`} aria-hidden="true"></i> יצירת מערכת חדשה
-                </button>
-
-                <button onClick={() => setEditMode(true)} disabled={!runInfo} style={{ ...styles.btnOutline, padding: '13px 24px', fontSize: '16px', opacity: !runInfo ? 0.5 : 1, cursor: !runInfo ? 'not-allowed' : 'pointer' }}>
-                    <i className="ti ti-edit" aria-hidden="true"></i> עריכה ידנית
                 </button>
 
                 <div style={{ position: 'relative' }}>
@@ -828,20 +835,23 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {visibleHours.map(hour => {
+                                            {visibleHoursFor(val).map((hour, hourIdx, hoursOfVal) => {
                                                 const breakAfter = breaks.find(b => b.after_lesson === hour);
-                                                const isLastVisibleHour = hour === visibleHours[visibleHours.length - 1];
+                                                const isLastVisibleHour = hourIdx === hoursOfVal.length - 1;
                                                 return (
                                                     <Fragment key={hour}>
                                                         <tr>
                                                             <td style={gridStyles.gridHourCell}>שיעור {hour}</td>
                                                             {visibleDays.map(day => {
-                                                                if (naCell(day, hour)) {
+                                                                const lessons = lessonsAt(val, day, hour);
+                                                                const outsideDay = naCell(val, day, hour);
+                                                                if (outsideDay && lessons.length === 0) {
                                                                     return <td key={day} style={{ ...gridStyles.gridCell, ...gridStyles.naCell }}></td>;
                                                                 }
-                                                                const lessons = lessonsAt(val, day, hour);
                                                                 return (
-                                                                    <td key={day} style={{ ...gridStyles.gridCell, backgroundColor: day === today ? '#f7faf5' : undefined }}>
+                                                                    <td key={day}
+                                                                        title={outsideDay ? 'השיעור משובץ אחרי שעת הסיום שהוגדרה ליום הזה' : undefined}
+                                                                        style={{ ...gridStyles.gridCell, backgroundColor: outsideDay ? '#FBF1EC' : (day === today ? '#f7faf5' : undefined), ...(outsideDay ? { outline: '1.5px dashed #c0705a', outlineOffset: '-3px' } : {}) }}>
                                                                         {lessons.length === 0 ? (
                                                                             <div style={gridStyles.freeCell}>פנוי</div>
                                                                         ) : lessons.map((e, idx) => {

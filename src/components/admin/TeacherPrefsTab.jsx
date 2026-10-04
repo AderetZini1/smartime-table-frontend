@@ -197,7 +197,7 @@ function TeacherPrefsDetail({ teacher, subjects, onBack, onViewSchedule }) {
       setData(await loadTeacherData(teacher.id));
       setEditing(false);
     } catch (err) {
-      alert('השמירה נכשלה. נסה/י שוב.');
+      alert('השמירה נכשלה. אפשר לנסות שוב.');
     } finally {
       setSaving(false);
     }
@@ -215,11 +215,11 @@ function TeacherPrefsDetail({ teacher, subjects, onBack, onViewSchedule }) {
 
       {confirmSchedule && (
         <ConfirmDialog
-          title="מעבר לתצוגת מערכת שעות"
-          message="המעבר יציג את מערכת השעות של המורה, ולא את עמוד ההעדפות."
-          warning="שים/י לב: אם התחלת לערוך ולא שמרת, השינויים לא יישמרו."
-          confirmLabel="כן, אני רוצה לצפות במערכת"
-          cancelLabel="להישאר בעמוד ההעדפות בינתיים"
+          title="מעבר למערכת השעות"
+          message={`תוצג מערכת השעות של ${fullName(teacher)}.`}
+          warning={editing ? 'שינויים שלא נשמרו יאבדו.' : undefined}
+          confirmLabel="צפייה במערכת"
+          cancelLabel="ביטול"
           maxWidth="440px"
           onConfirm={onViewSchedule}
           onCancel={() => setConfirmSchedule(false)}
@@ -238,7 +238,7 @@ function TeacherPrefsDetail({ teacher, subjects, onBack, onViewSchedule }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: 'auto', flexShrink: 0 }}>
             <button onClick={() => setConfirmSchedule(true)} style={iconButton}>
               <i className="ti ti-calendar" style={buttonIcon} aria-hidden="true"></i>
-              <span>צפה במערכת</span>
+              <span>צפייה במערכת</span>
             </button>
             {!editing ? (
               <button onClick={startEdit} disabled={!data} style={iconButton}>
@@ -247,7 +247,7 @@ function TeacherPrefsDetail({ teacher, subjects, onBack, onViewSchedule }) {
               </button>
             ) : (
               <>
-                <PrimaryButton onClick={save} busy={saving}>שמור</PrimaryButton>
+                <PrimaryButton onClick={save} busy={saving}>שמירה</PrimaryButton>
                 <button onClick={() => setEditing(false)} disabled={saving} style={iconButton}>ביטול</button>
               </>
             )}
@@ -283,7 +283,7 @@ const toggleIn = (list, value) => (list.includes(value) ? list.filter(x => x !==
 function SubjectsGradesSection({ data, draft, editing, patch, subjects }) {
   return (
     <SectionBox title="מקצועות ושכבות">
-      <div style={subLabel}>מקצועות שהמורה מלמד/ת</div>
+      <div style={subLabel}>מקצועות הוראה</div>
       {!editing ? (
         data.subjects.length === 0 ? (
           <div style={{ ...muted, marginBottom: '14px' }}>לא נבחרו מקצועות</div>
@@ -338,7 +338,7 @@ function HomeroomSection({ data, draft, editing, patch, groups }) {
     return (
       <SectionBox title="חינוך כיתה">
         <div style={infoText}>
-          <div>{h?.wants_homeroom ? 'המורה מעוניין/ת בחינוך כיתה' : 'המורה לא ביקש/ה חינוך כיתה'}</div>
+          <div>{h?.wants_homeroom ? 'יש בקשה לחינוך כיתה' : 'אין בקשה לחינוך כיתה'}</div>
           {h?.wants_homeroom && (
             <>
               <div>כיתה מועדפת: {groups.find(g => g.id === h.preferred_group_id)?.group_name || 'לא נבחרה'}</div>
@@ -356,7 +356,7 @@ function HomeroomSection({ data, draft, editing, patch, groups }) {
   return (
     <SectionBox title="חינוך כיתה">
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <ToggleRow label="מעוניין/ת בחינוך כיתה" on={h.wants_homeroom} onClick={() => setH('wants_homeroom', !h.wants_homeroom)} />
+        <ToggleRow label="בקשה לחינוך כיתה" on={h.wants_homeroom} onClick={() => setH('wants_homeroom', !h.wants_homeroom)} />
         {h.wants_homeroom && (
           <>
             <div style={{ maxWidth: '320px' }}>

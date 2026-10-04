@@ -109,13 +109,13 @@ export default function WindowsTab({ title }) {
       const w = confirmReminder;
       await sendNotification({
         title: 'תזכורת: הגשת העדפות',
-        body: `חלון ההגשה "${w.title}" נסגר ב-${fmtDateTime(w.end_date)}. מי שעדיין לא הגיש/ה העדפות — זה הזמן.`,
+        body: `חלון ההגשה "${w.title}" נסגר ב-${fmtDateTime(w.end_date)}. אם עוד לא הוגשו העדפות, זה הזמן.`,
         teacher_ids: null,
       });
       setConfirmReminder(null);
       setToast('✓ התזכורת נשלחה לכל המורים');
     } catch (e) {
-      alert('שליחת התזכורת נכשלה. נסה/י שוב.');
+      alert('שליחת התזכורת נכשלה. אפשר לנסות שוב.');
     } finally {
       setSendingReminder(false);
     }
@@ -133,7 +133,7 @@ export default function WindowsTab({ title }) {
         <span style={{ color: '#8a7a6e' }}>{fmtDateTime(w.end_date)}</span>,
         <span style={{ ...styles.badge, backgroundColor: s.bg, color: s.color }}>{s.label}</span>,
         <>
-          <i className="ti ti-copy" title="צור חלון דומה" onClick={() => openCopy(w)} style={bigIcon} aria-hidden="true"></i>
+          <i className="ti ti-copy" title="יצירת חלון דומה" onClick={() => openCopy(w)} style={bigIcon} aria-hidden="true"></i>
           <i className="ti ti-trash" title="מחיקה" onClick={() => setToDelete({ id: w.id, name: w.title })} style={bigIcon} aria-hidden="true"></i>
         </>,
       ],
@@ -185,7 +185,7 @@ export default function WindowsTab({ title }) {
         <ConfirmDialog
           title="לשלוח תזכורת לצוות?"
           message={`כל המורים יקבלו התראה שחלון "${confirmReminder.title}" נסגר ב-${fmtDateTime(confirmReminder.end_date)}.`}
-          confirmLabel="שלח תזכורת"
+          confirmLabel="שליחת תזכורת"
           busyLabel="שולח…"
           busy={sendingReminder}
           onConfirm={sendReminder}
@@ -228,7 +228,7 @@ function ActiveWindowCard({ window: w, onRemind }) {
 
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
         <button onClick={onRemind} style={{ ...styles.btnOutline, gap: '6px' }}>
-          <i className="ti ti-bell" aria-hidden="true"></i> שלח תזכורת לצוות
+          <i className="ti ti-bell" aria-hidden="true"></i> שליחת תזכורת לצוות
         </button>
       </div>
     </div>
@@ -249,7 +249,7 @@ function NoActiveCard({ next, onCreate }) {
             : 'מורים לא יכולים להגיש העדפות עד שייפתח חלון.'}
         </div>
       </div>
-      {!next && <AddButton label="פתח חלון" onClick={onCreate} />}
+      {!next && <AddButton label="פתיחת חלון" onClick={onCreate} />}
     </div>
   );
 }
@@ -319,7 +319,7 @@ function CreateWindowModal({ initial, existing, onClose, onCreated }) {
       await createSubmissionWindow({ ...draft, title: draft.title.trim() });
     } catch (e) {
       setSaving(false);
-      setDateError('יצירת החלון נכשלה. נסה/י שוב.');
+      setDateError('יצירת החלון נכשלה. אפשר לנסות שוב.');
       return;
     }
 
@@ -367,7 +367,7 @@ function CreateWindowModal({ initial, existing, onClose, onCreated }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '16px' }}>
         <DateTimeField
-          label="נפתח"
+          label="פתיחה"
           value={draft.start_date}
           defaultTime="08:00"
           error={errors.start_date}
@@ -375,7 +375,7 @@ function CreateWindowModal({ initial, existing, onClose, onCreated }) {
           onChange={v => setField('start_date', v)}
         />
         <DateTimeField
-          label="נסגר"
+          label="סגירה"
           value={draft.end_date}
           defaultTime="23:59"
           error={errors.end_date}
@@ -397,13 +397,13 @@ function CreateWindowModal({ initial, existing, onClose, onCreated }) {
 
       <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#4a3f35', marginBottom: '22px', cursor: 'pointer' }}>
         <input type="checkbox" checked={notify} onChange={e => setNotify(e.target.checked)} style={{ accentColor: '#8a9e78', width: '16px', height: '16px', cursor: 'pointer', margin: 0 }} />
-        שלח הודעה לכל המורים על החלון
+        שליחת הודעה לכל המורים על החלון
       </label>
 
       <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
         <button onClick={onClose} disabled={saving} style={styles.btnOutline}>ביטול</button>
         <button onClick={submit} disabled={saving} style={{ ...styles.btnAdd, opacity: saving ? 0.6 : 1 }}>
-          {saving ? 'יוצר…' : 'צור חלון'}
+          {saving ? 'יוצר…' : 'יצירת חלון'}
         </button>
       </div>
     </Modal>

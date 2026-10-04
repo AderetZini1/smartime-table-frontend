@@ -26,6 +26,8 @@ export default function AdminDashboard() {
   // Handoff into ScheduleTab: { type: 'class'|'teacher'|'subject'|'grade', value } | null
   const [scheduleJump, setScheduleJump] = useState(null);
   const [toast, setToast] = useState(null); // { message, ms }
+  // לחיצה על הטאב שכבר פתוח מחזירה אותו למסך הראשי שלו (למשל מהיסטוריית מערכות)
+  const [tabResetKey, setTabResetKey] = useState(0);
 
   useEffect(() => {
     localStorage.setItem('adminActiveTab', activeTab);
@@ -57,6 +59,7 @@ export default function AdminDashboard() {
           <>
             <PageHeader title={title} />
             <ScheduleTab
+              key={tabResetKey}
               jumpTarget={scheduleJump}
               onJumpHandled={() => setScheduleJump(null)}
               onRunSelected={() => showToast('המערכת הנבחרת עודכנה. ניתן לצפות בה כעת ולפרסם לצוות.', 5000)}
@@ -80,7 +83,7 @@ export default function AdminDashboard() {
   const navButton = (id) => {
     const tab = TABS.find(t => t.id === id);
     return (
-      <button key={id} onClick={() => setActiveTab(id)} style={styles.navItem(activeTab === id)}>
+      <button key={id} onClick={() => { if (id === activeTab) setTabResetKey(k => k + 1); setActiveTab(id); }} style={styles.navItem(activeTab === id)}>
         <i className={`ti ${tab.icon}`} style={{ fontSize: '18px' }} aria-hidden="true"></i>
         {tab.label}
         {id === 'requests' && pendingCount > 0 && (
@@ -124,9 +127,9 @@ export default function AdminDashboard() {
             onClick={() => navigate('/teacher')}
             style={{ fontSize: '13px', color: '#8a9e78', background: 'none', border: '1px solid #8a9e78', borderRadius: '8px', padding: '7px 14px', cursor: 'pointer', width: '100%', marginBottom: '8px', fontFamily: FONT }}
           >
-            <i className="ti ti-user" aria-hidden="true"></i> עבור לתצוגת מורה
+            <i className="ti ti-user" aria-hidden="true"></i> מעבר לתצוגת מורה
           </button>
-          <button onClick={logout} style={{ ...styles.btnOutline, width: '100%' }}>התנתק</button>
+          <button onClick={logout} style={{ ...styles.btnOutline, width: '100%' }}>התנתקות</button>
         </div>
       </div>
 
