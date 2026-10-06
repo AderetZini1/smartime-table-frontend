@@ -59,7 +59,7 @@ const CELL_COLORS = {
   unavailable: { bg: '#FAE8E8', border: '#e8c0b0', icon: 'ti-x', color: '#c0705a' },
 };
 
-const STATE_LABELS = { preferred_not: 'מעדיף שלא', unavailable: 'לא יכול' };
+const STATE_LABELS = { preferred_not: 'מעדיף שלא', unavailable: 'לא יכול', free: 'ביטול סימון' };
 
 const AI_FEATURE_ENABLED = true;
 
@@ -296,7 +296,7 @@ export default function TeacherDashboard() {
   useEffect(() => {
     if (activeTab === 'constraints') {
       getActiveWindow().then(r => { setActiveWindow(r.data); setWindowLoaded(true); }).catch(() => { setActiveWindow(null); setWindowLoaded(true); });
-      getMyConstraints().then(r => setConstraintsRaw(r.data)).catch(() => { });
+      getMyConstraints().then(r => setConstraintsRaw(r.data.filter(c => c.teacher_id === user.id))).catch(() => { });
       getMyGradeLevels().then(r => setMyGradeLevels(r.data.map(g => g.grade_level))).catch(() => { });
       getMyHomeroomPref().then(r => {
         if (r.data && r.data.id) {
@@ -561,7 +561,11 @@ export default function TeacherDashboard() {
     setAiPreview(null);
     try {
       const res = await parseConstraintsAI(aiText);
-      setAiPreview(res.data.result);
+      const result = res.data.result;
+      // "free" = ביטול סימון: מסננים ביטולים של תאים שממילא לא מסומנים
+      const allConstraints = result.constraints || [];
+      const effective = allConstraints.filter(c => c.type !== 'free' || cellStates[`${c.day - 1}-${c.hour}`]);
+      setAiPreview({ ...result, constraints: effective, noopFrees: allConstraints.length - effective.length });
     } catch (e) {
       setAiError('הניתוח נכשל, נסה לנסח מחדש');
     } finally {
@@ -856,7 +860,7 @@ export default function TeacherDashboard() {
                           <div style={{ fontSize: '14px', color: '#4a3f35', marginBottom: '11px' }}>כך הבנתי את הבקשה — אשר/י שזה נכון:</div>
 
                           {aiPreviewIsEmpty ? (
-                            <div style={{ fontSize: '14px', color: '#8a7a6e' }}>לא זוהה תוכן בטקסט.</div>
+                            <div style={{ fontSize: '14px', color: '#8a7a6e' }}>{aiPreview.noopFrees > 0 ? 'התאים שציינת כבר פנויים — אין מה לבטל.' : 'לא זוהה תוכן בטקסט.'}</div>
                           ) : (
                             <ul style={{ margin: 0, paddingRight: '19px', fontSize: '14px', color: '#4a3f35', lineHeight: 1.9 }}>
                               {(aiPreview.constraints || []).map((c, i) => (
