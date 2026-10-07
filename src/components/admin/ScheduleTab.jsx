@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import {
     runMemeticGeneration, getGenerationStatus, getGenerationPreflight, getCurrentSchedule,
-    publishSchedule, getViolations, getSchoolSettings,
+    publishSchedule, getViolations, getSchoolSettings, getSettingsStatus,
 } from '../../services/api';
 import { exportSingleSchedule, exportMultiSchedule } from '../../utils/exportSchedule';
 import { exportSinglePDF, exportMultiPDF } from '../../utils/exportSchedulePDF';
@@ -208,6 +208,24 @@ const readViewState = () => {
     catch (e) { return {}; }
 };
 
+// הודעה: ההגדרות שונו מאז שנוצרה המערכת הנוכחית ו/או המפורסמת.
+// status מגיע מהשרת: { current: { changed }, published: { changed } } (changed = true / false / null = לא ידוע)
+function SettingsChangedNotice({ status }) {
+    const targets = [];
+    if (status?.current?.changed === true) targets.push('המערכת הנוכחית');
+    if (status?.published?.changed === true) targets.push('המערכת המפורסמת');
+    if (targets.length === 0) return null;
+    return (
+        <div role="status" style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', backgroundColor: '#FFF8E1', border: '1px solid #ecdca0', borderRadius: '10px', padding: '10px 14px', marginBottom: '16px', fontSize: '13px', color: '#7a6a1a', lineHeight: 1.6 }}>
+            <i className="ti ti-info-circle" style={{ fontSize: '16px', flexShrink: 0, marginTop: '2px' }} aria-hidden="true"></i>
+            <div>
+                <div><strong>שימו לב:</strong> בוצע שינוי בהגדרות, והן אינן זהות להגדרות של {targets.join(' ושל ')}.</div>
+                <div style={{ color: '#8a7a6e' }}>המערכת עצמה לא השתנתה. שינויי ההגדרות ישפיעו רק על מערכת חדשה.</div>
+            </div>
+        </div>
+    );
+}
+
 export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, onRunDeleted }) {
     const [entries, setEntries] = useState([]);
     const [runInfo, setRunInfo] = useState(null);
@@ -229,6 +247,8 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
     const [preflightWarnings, setPreflightWarnings] = useState([]);
     const [preflightChecking, setPreflightChecking] = useState(false);
     const [schoolSettings, setSchoolSettings] = useState(null);
+    // האם ההגדרות של היום שונות מאלה שלפיהן נוצרו המערכת הנוכחית / המפורסמת (null = לא ידוע)
+    const [settingsStatus, setSettingsStatus] = useState(null);
     // עמוד פנימי בתוך הטאב: null = מערכת השעות, 'history' = היסטוריית מערכות
     const [subPage, setSubPage] = useState(null);
     const [moreOpen, setMoreOpen] = useState(false);
@@ -314,6 +334,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
             const res = await getCurrentSchedule();
             setEntries(res.data.entries || []);
             setRunInfo(res.data.run || null);
+            getSettingsStatus().then(r => setSettingsStatus(r.data)).catch(() => setSettingsStatus(null));
             if (res.data.run) {
                 getViolations().then(r => {
                     const list = r.data.violations || [];
@@ -602,6 +623,7 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
             )}
 
             {generating && <div style={{ fontSize: '12px', color: '#8a7a6e', marginBottom: '12px' }}>היצירה עשויה לקחת עד כ-3 דקות. אפשר להמתין כאן.</div>}
+            <SettingsChangedNotice status={settingsStatus} />
             {genError && <div style={{ fontSize: '12px', color: '#c0705a', marginBottom: '12px' }}>{genError}</div>}
             {publishMsg && <div style={{ fontSize: '12px', color: '#6b8f5e', marginBottom: '12px' }}>{publishMsg}</div>}
 
