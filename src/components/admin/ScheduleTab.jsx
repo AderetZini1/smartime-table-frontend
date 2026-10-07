@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import {
-    runMemeticGeneration, getGenerationStatus, getCurrentSchedule,
+    runMemeticGeneration, getGenerationStatus, getGenerationPreflight, getCurrentSchedule,
     publishSchedule, getViolations, getSchoolSettings,
 } from '../../services/api';
 import { exportSingleSchedule, exportMultiSchedule } from '../../utils/exportSchedule';
@@ -26,6 +26,14 @@ const GRADE_LETTERS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו'];
 const ACTIVE_JOB_KEY = 'activeGenJob';
 const VIEW_STATE_KEY = 'scheduleViewState';
 const SHOW_SCORE_KEY = 'showViolationScore';
+// שמות הקטגוריות בחלון "לא ניתן להתחיל ביצירת המערכת" (המפתחות מגיעים מהשרת)
+const PREFLIGHT_CATEGORY_LABELS = {
+    structure: 'מבנה יום הלימודים',
+    curriculum: 'תוכנית לימודים',
+    assignments: 'שיוך מורים',
+    rooms: 'חדרים',
+    sync: 'שיעורים מקבילים (סנכרון)',
+};
 
 function periodsUntil(startStr, endStr, breaks) {
     const toMin = s => { if (!s) return null; const p = String(s).split(':'); return (+p[0]) * 60 + (+p[1]); };
@@ -216,6 +224,10 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
     const [comboInput, setComboInput] = useState('');
     const [showPublishConfirm, setShowPublishConfirm] = useState(false);
     const [confirmGenerateType, setConfirmGenerateType] = useState(null);
+        // בדיקת נתונים לפני יצירה: preflightBlock = רשימת הבעיות כשהיצירה חסומה, אחרת null
+    const [preflightBlock, setPreflightBlock] = useState(null);
+    const [preflightWarnings, setPreflightWarnings] = useState([]);
+    const [preflightChecking, setPreflightChecking] = useState(false);
     const [schoolSettings, setSchoolSettings] = useState(null);
     // עמוד פנימי בתוך הטאב: null = מערכת השעות, 'history' = היסטוריית מערכות
     const [subPage, setSubPage] = useState(null);
@@ -330,7 +342,9 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
             trackJob(start.data.job_id);
         } catch (e) {
             setGenerating(false);
-            if (e.response && e.response.status === 409) setGenError('יצירת מערכת כבר רצה כרגע. אפשר לנסות שוב עוד רגע.');
+            const detail = e.response?.data?.detail;
+            if (e.response && e.response.status === 422 && detail && Array.isArray(detail.issues)) setPreflightBlock(detail.issues);
+            else if (e.response && e.response.status === 409) setGenError('יצירת מערכת כבר רצה כרגע. אפשר לנסות שוב עוד רגע.');
             else setGenError('לא ניתן להתחיל יצירת מערכת');
         }
     };
@@ -351,7 +365,29 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
         }
     };
 
-    const requestGenerate = (type) => setConfirmGenerateType(type);
+    // לפני חלון האישור: בודקים בשרת שהנתונים מאפשרים יצירה.
+    // שגיאה → חלון חסימה עם הרשימה. אזהרות בלבד → ממשיכים לאישור ומציגים אותן שם.
+    // אם הבדיקה עצמה נכשלה (רשת/שרת) לא חוסמים כאן — השרת בודק שוב בעת ההרצה.
+    const requestGenerate = async (type) => {
+        if (preflightChecking) return;
+        setGenError('');
+        setPreflightChecking(true);
+        let issues = [];
+        try {
+            const r = await getGenerationPreflight();
+            issues = r.data.issues || [];
+        } catch (e) {
+            issues = [];
+        } finally {
+            setPreflightChecking(false);
+        }
+        if (issues.some(i => i.severity === 'error')) {
+            setPreflightBlock(issues);
+            return;
+        }
+        setPreflightWarnings(issues.filter(i => i.severity === 'warning'));
+        setConfirmGenerateType(type);
+    };
     const runConfirmedGenerate = () => {
         setConfirmGenerateType(null);
         handleGenerate();
@@ -892,6 +928,49 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
                 </>
             )}
 
+            {preflightBlock && (() => {
+                const errors = preflightBlock.filter(i => i.severity === 'error');
+                const warnings = preflightBlock.filter(i => i.severity !== 'error');
+                const byCategory = {};
+                errors.forEach(i => { (byCategory[i.category] = byCategory[i.category] || []).push(i); });
+                return (
+                    <div onClick={() => setPreflightBlock(null)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                        <div onClick={e => e.stopPropagation()} dir="rtl" style={{ backgroundColor: '#FAF7F2', border: '1px solid #e2dacc', borderRadius: '14px', padding: '24px', width: '92%', maxWidth: '560px', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 10px 30px rgba(0,0,0,0.15)' }}>
+                            <h3 style={{ margin: '0 0 6px 0', fontSize: '17px', color: '#4a3f35' }}>
+                                <i className="ti ti-alert-triangle" style={{ color: '#c0705a', marginLeft: '8px' }} aria-hidden="true"></i>
+                                לא ניתן להתחיל ביצירת המערכת כי:
+                            </h3>
+                            <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#8a7a6e', lineHeight: 1.6 }}>
+                                יש לתקן את הנתונים הבאים ואז לנסות שוב.
+                            </p>
+                            {Object.keys(byCategory).map(cat => (
+                                <div key={cat} style={{ marginBottom: '14px' }}>
+                                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#4a3f35', marginBottom: '6px' }}>
+                                        {PREFLIGHT_CATEGORY_LABELS[cat] || cat} <span style={{ fontWeight: 400, color: '#8a7a6e' }}>({byCategory[cat].length})</span>
+                                    </div>
+                                    {byCategory[cat].map((i, idx) => (
+                                        <div key={idx} style={{ fontSize: '13px', color: '#8a3a2c', backgroundColor: '#FAE8E8', border: '1px solid #f0c7c0', borderRadius: '8px', padding: '8px 12px', marginBottom: '6px', lineHeight: 1.6 }}>
+                                            {i.message}
+                                        </div>
+                                    ))}
+                                </div>
+                            ))}
+                            {warnings.length > 0 && (
+                                <div style={{ marginBottom: '14px' }}>
+                                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#4a3f35', marginBottom: '6px' }}>אזהרות (לא חוסמות)</div>
+                                    {warnings.map((w, idx) => (
+                                        <div key={idx} style={{ fontSize: '13px', color: '#7a6a1a', backgroundColor: '#FFF3A3', borderRadius: '8px', padding: '8px 12px', marginBottom: '6px', lineHeight: 1.6 }}>
+                                            {w.message}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <button onClick={() => setPreflightBlock(null)} style={{ ...styles.btnOutline, padding: '9px 18px', fontSize: '14px' }}>הבנתי</button>
+                        </div>
+                    </div>
+                );
+            })()}
+            
             {confirmGenerateType && (
                 <div onClick={() => setConfirmGenerateType(null)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
                     <div onClick={e => e.stopPropagation()} style={{ backgroundColor: '#FAF7F2', border: '1px solid #e2dacc', borderRadius: '14px', padding: '24px', width: '90%', maxWidth: '420px', boxShadow: '0 10px 30px rgba(0,0,0,0.15)' }}>
@@ -903,6 +982,12 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
                                 ? 'התהליך עשוי לקחת עד כ-3 דקות. המערכת הנוכחית תישמר בהיסטוריה ולא תימחק.'
                                 : 'תיבנה גרסה משופרת על בסיס המערכת הנוכחית. התהליך עשוי לקחת עד כ-3 דקות, והמערכת הנוכחית תישמר בהיסטוריה.'}
                         </p>
+                        {preflightWarnings.length > 0 && (
+                            <div style={{ margin: '0 0 20px 0', fontSize: '13px', color: '#7a6a1a', backgroundColor: '#FFF3A3', borderRadius: '8px', padding: '8px 12px', lineHeight: 1.6 }}>
+                                <strong>שימו לב:</strong>
+                                {preflightWarnings.map((w, i) => <div key={i}>• {w.message}</div>)}
+                            </div>
+                        )}
                         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-start' }}>
                             <button onClick={runConfirmedGenerate} style={{ backgroundColor: '#8a9e78', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '14px', cursor: 'pointer' }}>{confirmGenerateType === 'new' ? 'יצירה' : 'שיפור'}</button>
                             <button onClick={() => setConfirmGenerateType(null)} style={{ ...styles.btnOutline, padding: '9px 18px', fontSize: '14px' }}>ביטול</button>
