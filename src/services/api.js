@@ -154,6 +154,7 @@ export const login8001 = (username, password) =>
 export const runGeneration = () => api2.post('/generation/run');
 export const runMemeticGeneration = () => api2.post('/generation/run-memetic');
 export const getGenerationStatus = (jobId) => api2.get(`/generation/${jobId}`);
+export const getGenerationPreflight = () => api2.get('/generation/preflight');
 
 // Schedule display
 export const getCurrentSchedule = () => api2.get('/schedule/current'); // admin: whole school
