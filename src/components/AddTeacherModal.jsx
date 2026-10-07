@@ -41,7 +41,7 @@ const makeSchema = (isEdit) => yup.object({
 export default function AddTeacherModal({ onClose, onAdded, onUpdated, teacher }) {
   const isEdit = !!teacher;
 
-  const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm({
+  const { register, handleSubmit, setValue, setError, formState: { errors, isSubmitting } } = useForm({
     resolver: yupResolver(makeSchema(isEdit)),
     defaultValues: isEdit
       ? {
@@ -82,6 +82,12 @@ export default function AddTeacherModal({ onClose, onAdded, onUpdated, teacher }
       onClose();
     } catch (err) {
       console.error(err);
+      const fieldErrors = err.response?.data?.detail?.field_errors;
+      if (err.response?.status === 409 && fieldErrors) {
+        Object.entries(fieldErrors).forEach(([field, message]) => {
+          setError(field, { type: 'server', message });
+        });
+      }
     }
   };
 
