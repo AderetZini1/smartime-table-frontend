@@ -215,13 +215,19 @@ function SettingsChangedNotice({ status }) {
     if (status?.current?.changed === true) targets.push('המערכת הנוכחית');
     if (status?.published?.changed === true) targets.push('המערכת המפורסמת');
     if (targets.length === 0) return null;
+    // marginTop שלילי מעלה את ההודעה לגובה כותרת הדף. להזזה למעלה/למטה - לשנות את המספר.
     return (
-        <div role="status" style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', backgroundColor: '#FFF8E1', border: '1px solid #ecdca0', borderRadius: '10px', padding: '10px 14px', marginBottom: '16px', fontSize: '13px', color: '#7a6a1a', lineHeight: 1.6 }}>
-            <i className="ti ti-info-circle" style={{ fontSize: '16px', flexShrink: 0, marginTop: '2px' }} aria-hidden="true"></i>
-            <div>
-                <div><strong>שימו לב:</strong> בוצע שינוי בהגדרות, והן אינן זהות להגדרות של {targets.join(' ושל ')}.</div>
-                <div style={{ color: '#8a7a6e' }}>המערכת עצמה לא השתנתה. שינויי ההגדרות ישפיעו רק על מערכת חדשה.</div>
-            </div>
+        <div role="status" dir="rtl" style={{ flex: '0 0 318px', boxSizing: 'border-box', marginTop: '-62px', backgroundColor: '#FAF7F2', border: '1px solid #e2dacc', borderRadius: '14px', padding: '18px 20px', boxShadow: '0 1px 3px rgba(74,63,53,0.06)' }}>
+            <h3 style={{ margin: '0 0 10px 0', fontSize: '17px', color: '#4a3f35', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <i className="ti ti-info-circle" style={{ color: '#8a9e78' }} aria-hidden="true"></i>
+                שימו לב
+            </h3>
+            <p style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#4a3f35', lineHeight: 1.6 }}>
+                בוצע שינוי בהגדרות, והן אינן זהות להגדרות של {targets.join(' ושל ')}.
+            </p>
+            <p style={{ margin: 0, fontSize: '13px', color: '#8a7a6e', lineHeight: 1.6 }}>
+                המערכת עצמה לא השתנתה. שינויי ההגדרות ישפיעו רק על מערכת חדשה.
+            </p>
         </div>
     );
 }
@@ -598,6 +604,8 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
     return (
         <>
             {generating && <LoadingScreen floating offset="280px" tagline="יוצר מערכת שעות" />}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '24px' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ marginBottom: '18px' }}>
                 <div style={{ fontSize: '16px', color: '#8a7a6e' }}>מערכת השעות הפעילה של בית הספר</div>
                 <div style={{ fontSize: '15px', color: '#8a7a6e', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -623,7 +631,6 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
             )}
 
             {generating && <div style={{ fontSize: '12px', color: '#8a7a6e', marginBottom: '12px' }}>היצירה עשויה לקחת עד כ-3 דקות. אפשר להמתין כאן.</div>}
-            <SettingsChangedNotice status={settingsStatus} />
             {genError && <div style={{ fontSize: '12px', color: '#c0705a', marginBottom: '12px' }}>{genError}</div>}
             {publishMsg && <div style={{ fontSize: '12px', color: '#6b8f5e', marginBottom: '12px' }}>{publishMsg}</div>}
 
@@ -671,7 +678,9 @@ export default function ScheduleTab({ jumpTarget, onJumpHandled, onRunSelected, 
                     )}
                 </div>
             </div>
-
+                </div>
+                <SettingsChangedNotice status={settingsStatus} />
+            </div>
             {!runInfo ? (
                 <div style={{ textAlign: 'center', padding: '48px 20px' }}>
                     <i className="ti ti-calendar-off" style={{ fontSize: '34px', color: '#c8baa6', display: 'block', marginBottom: '14px' }} aria-hidden="true"></i>
