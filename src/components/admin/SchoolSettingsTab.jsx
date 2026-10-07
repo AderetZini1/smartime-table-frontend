@@ -325,6 +325,26 @@ function PedagogicalSection() {
     getSubjects().then(r => setSubjects(r.data)).catch(() => { });
   }, []);
 
+  // נתונים לאזהרות על אילוצים: תכנית לימודים, שיוכים ומבנה יום. אם הטעינה נכשלת – פשוט אין אזהרות.
+  const [plan, setPlan] = useState(null);
+  const [warnOpen, setWarnOpen] = useState({});
+  useEffect(() => {
+    Promise.all([getStudentGroups(), getSchoolSettings(), getTeacherAssignments()])
+      .then(async ([g, st, ta]) => {
+        const lists = await Promise.all(g.data.map(gr => getCurriculumByGroup(gr.id).then(r => r.data).catch(() => [])));
+        setPlan({
+          settings: st.data, groups: g.data, assignments: ta.data,
+          rows: lists.flatMap((rs, i) => rs.map(r => ({ ...r, student_group_id: g.data[i].id }))),
+        });
+      })
+      .catch(() => { });
+  }, []);
+  // רשת ביטחון: באג בחישוב האזהרות לא ישבור את המסך
+  const warnings = useMemo(() => {
+    try { return plan && constraints ? pedagogicalWarnings(constraints, { subjects, ...plan }) : {}; }
+    catch { return {}; }
+  }, [plan, constraints, subjects]);
+
   const subjectName = (id) => subjects.find(s => s.id === id)?.subject_name || '';
 
   const handleAdd = async () => {
@@ -415,11 +435,23 @@ function PedagogicalSection() {
                       ) : (
                         <tr key={p.id}>
                           <td style={TD}><TypePill type={p.constraint_type} /></td>
-                          <td style={{ ...TD, fontSize: '15px' }}>{describe(p, subjectName)}</td>
+                          <td style={{ ...TD, fontSize: '15px' }}>
+                            {describe(p, subjectName)}
+                            {warnings[p.id] && warnOpen[p.id] && (
+                              <div style={{ whiteSpace: 'normal', maxWidth: '440px', marginTop: '8px', fontSize: '13px', lineHeight: 1.6, color: C.yellowText, background: C.yellowBg, borderRadius: '8px', padding: '8px 12px' }}>
+                                {warnings[p.id].map((m, i) => <div key={i}>{m}</div>)}
+                                <div style={{ marginTop: '4px', color: C.soft }}>זו אזהרה בלבד – היא לא מונעת יצירת מערכת.</div>
+                              </div>
+                            )}
+                          </td>
                           <td style={{ ...TD, paddingInline: '8px' }}>
                             <span style={{ display: 'flex', gap: '2px' }}>
                               <IconBtn label="עריכה" icon="ti-pencil" onClick={() => { setEditError(''); setEditingId(p.id); setEditDraft(toDraft(p)); }} />
                               <IconBtn label="מחיקה" icon="ti-trash" onClick={() => setToDelete({ id: p.id, name: `${pedTypeLabel(p.constraint_type)} – ${subjectName(p.subject_a_id)}` })} />
+                              {warnings[p.id] && (
+                                <IconBtn label={`אזהרה: ${warnings[p.id].join(' ')}`} icon="ti-alert-triangle" style={{ color: C.warmBar }}
+                                  onClick={() => setWarnOpen(o => ({ ...o, [p.id]: !o[p.id] }))} />
+                              )}
                             </span>
                           </td>
                         </tr>
@@ -1363,6 +1395,104 @@ function weeklyCapacity(settings, grade) {
   }
   return total;
 }
+
+// ─── pedagogical warnings ───────────────────────────────────────────────────
+// כל האילוצים הפדגוגיים רכים אצל המחולל (הפרה = קנס ושורה בדוח, לא כישלון), ולכן אלה אזהרות בלבד.
+
+// כמה שיעורים יש בכל יום לימוד של שכבה: [6, 6, 6, 6, 6, 4]. null כשאי אפשר לחשב מההגדרות.
+// אותם כללים כמו weeklyCapacity (סכום המערך = weeklyCapacity).
+function dayLengths(settings, grade) {
+  if (!settings || !grade) return null;
+  const weekday = Math.min(computeDay(settings, grade).lessons, SLOTS_PER_DAY);
+  const friday = Math.min(lessonsBetween(settings, settings.friday_end_time), SLOTS_PER_DAY);
+  const out = [];
+  for (const d of settings.active_days || []) {
+    const n = d === 6 ? friday : weekday;
+    if (n < 1) return null;
+    out.push(n);
+  }
+  return out.length ? out : null;
+}
+
+// הכי הרבה שיעורים של אותו מקצוע ביום באורך len כשצריך רווח של k שיעורים ביניהם
+// (k=0 = חייבים להיות צמודים, ולכן לא יותר מ־2 ביום)
+const maxSameSubjectPerDay = (len, k) => (k === 0 ? Math.min(2, len) : Math.ceil(len / (k + 1)));
+
+// { [constraintId]: [הודעה, ...] } לכל אילוץ פדגוגי שיש עליו אזהרה
+function pedagogicalWarnings(constraints, { subjects, groups, rows, assignments, settings }) {
+  const out = {};
+  const add = (id, msg) => { (out[id] = out[id] || []).push(msg); };
+  const subj = (id) => subjects.find(s => s.id === id)?.subject_name || `#${id}`;
+
+  // כמה שעות של כל מקצוע בכל כיתה המחולל ישבץ: שעות × מספר המורים המשויכים (לפחות 1)
+  const teachersPerRow = {};
+  assignments.forEach(a => { teachersPerRow[a.cur_requirement_id] = (teachersPerRow[a.cur_requirement_id] || 0) + 1; });
+  const hours = {};
+  rows.forEach(r => {
+    const key = `${r.student_group_id}:${r.subject_id}`;
+    hours[key] = (hours[key] || 0) + (r.weekly_hours || 0) * Math.max(1, teachersPerRow[r.id] || 0);
+  });
+
+  const classes = groups
+    .map(g => ({ id: g.id, name: shortName(g), lens: dayLengths(settings, groupGrade(g)) }))
+    .filter(c => c.lens);
+  // כיתות שבהן יש יותר שעות מקצוע ממה שאפשר לשבץ בלי להפר (capacityOf = כמה שעות אפשר לכל היותר)
+  const overflowing = (subjectId, capacityOf) => classes
+    .map(c => ({ c, h: hours[`${c.id}:${subjectId}`] || 0, cap: capacityOf(c.lens) }))
+    .filter(x => x.h > x.cap)
+    .map(x => `${x.c.name} (${x.h} שעות, אפשר לכל היותר ${x.cap})`);
+  const listed = (arr) => (arr.length > 4 ? `${arr.slice(0, 4).join(', ')} ועוד ${arr.length - 4}` : arr.join(', '));
+
+  // מקצוע שני של האילוץ. ב"מרווח" בלי מקצוע שני הכוונה לאותו מקצוע.
+  const secondOf = (p) => (p.constraint_type === 'min_gap' ? (p.subject_b_id ?? p.subject_a_id) : p.subject_b_id);
+  const subjectsKey = (p) => [p.subject_a_id, secondOf(p)].filter(x => x != null).sort((x, y) => x - y).join(',');
+  const isZeroGap = (p) => p.constraint_type === 'min_gap' && !(p.numeric_value > 0);
+
+  // 1. אילוצים כפולים: אותו סוג על אותם מקצועות
+  const byKey = {};
+  constraints.forEach(p => { (byKey[`${p.constraint_type}|${subjectsKey(p)}`] = byKey[`${p.constraint_type}|${subjectsKey(p)}`] || []).push(p); });
+  Object.values(byKey).filter(list => list.length > 1).forEach(list => {
+    list.forEach(p => {
+      const sameValue = list.some(q => q.id !== p.id && (q.numeric_value ?? null) === (p.numeric_value ?? null));
+      add(p.id, sameValue
+        ? 'אותו אילוץ מופיע ברשימה יותר מפעם אחת.'
+        : 'יש אילוץ נוסף מאותו סוג על אותם מקצועות, עם ערך שונה. הם חופפים, והמחמיר מביניהם הוא שקובע.');
+    });
+  });
+
+  constraints.forEach(p => {
+    const t = p.constraint_type, a = p.subject_a_id, b = secondOf(p), n = p.numeric_value;
+
+    // 2. "לא צמודים" מול "מרווח 0" (= חייבים להיות צמודים) על אותו זוג מקצועות
+    if (t === 'not_consecutive' && b != null && constraints.some(q => isZeroGap(q) && subjectsKey(q) === subjectsKey(p))) {
+      add(p.id, `סותר אילוץ "מרווח 0" על ${subj(a)} ו${subj(b)}: אחד דורש שהשיעורים יהיו צמודים והשני אוסר זאת. שניהם יתקיימו רק אם המקצועות אף פעם לא באותו יום.`);
+    }
+    if (isZeroGap(p) && b !== a && constraints.some(q => q.constraint_type === 'not_consecutive' && subjectsKey(q) === subjectsKey(p))) {
+      add(p.id, `סותר אילוץ "לא בשיעורים צמודים" על ${subj(a)} ו${subj(b)}: אחד דורש שהשיעורים יהיו צמודים והשני אוסר זאת. שניהם יתקיימו רק אם המקצועות אף פעם לא באותו יום.`);
+    }
+
+    // 3. מרווח 0 פירושו בפועל "חייבים להיות צמודים", לא "ללא הגבלה"
+    if (isZeroGap(p)) {
+      add(p.id, 'הערך 0 פירושו בפועל שהשיעורים חייבים להיות צמודים (ולא "ללא הגבלה"). אם זו לא הכוונה, יש לשנות את הערך.');
+    }
+
+    // 4. "מקסימום ביום" שהתכנית לא מאפשרת לעמוד בו (שעות המקצוע > מקסימום × ימי הלימוד)
+    if (t === 'max_per_day' && a != null && n >= 1) {
+      const bad = overflowing(a, lens => lens.reduce((s, len) => s + Math.min(n, len), 0));
+      if (bad.length) add(p.id, `בכיתות הבאות יש יותר שעות ${subj(a)} בשבוע ממה שהאילוץ מאפשר, ולכן הוא יופר בהכרח: ${listed(bad)}.`);
+    }
+
+    // 5. "מרווח" בין שיעורים של אותו מקצוע שאי אפשר לעמוד בו
+    if (t === 'min_gap' && a != null && b === a) {
+      const k = n > 0 ? n : 0;
+      const bad = overflowing(a, lens => lens.reduce((s, len) => s + maxSameSubjectPerDay(len, k), 0));
+      if (bad.length) add(p.id, `בכיתות הבאות אי אפשר לפזר את שעות ${subj(a)} כך שיתקיים הרווח הנדרש, ולכן האילוץ יופר בהכרח: ${listed(bad)}.`);
+    }
+  });
+
+  return out;
+}
+
 
 // ─── save tracking ──────────────────────────────────────────────────────────
 // track(promise) → status goes 'saving' while anything is pending, then 'saved' or 'error'.
