@@ -641,8 +641,7 @@ function CurriculumSection() {
 
   // weekly ceiling from the day structure
   const grade = selected ? groupGrade(selected) : null;
-  const lessonsPerDay = settings && grade ? computeDay(settings, grade).lessons : 0;
-  const capacity = lessonsPerDay * (settings?.active_days?.length || 0);
+  const capacity = weeklyCapacity(settings, grade);
 
   // copy sources: other classes that have a plan, parallel classes first
   const sources = groups
@@ -1342,6 +1341,27 @@ function lessonsBetween(settings, endStr) {
     if (br && t + br.duration_minutes + LESSON_MINUTES <= end) t += br.duration_minutes;
   }
   return n;
+}
+
+// מספר המשבצות ביום בטבלת timeslots בשרת (שעות 1–8); השרת לא ישבץ יותר מזה
+const SLOTS_PER_DAY = 8;
+
+// כמה שיעורים בשבוע נכנסים במבנה היום, לשכבה אחת. אותו כלל כמו בשרת (preflight.py):
+// כל יום פעיל נספר, שישי (יום 6) מסתיים ב־friday_end_time, שאר הימים בשעת הסיום של השכבה,
+// ואף יום לא מכיל יותר מ־8 שיעורים.
+// מחזירה 0 כשאי אפשר לחשב מההגדרות (יום פעיל בלי שעת סיום שמאפשרת שיעור): בשרת יש שם
+// ערך ברירת מחדל, ולכן המסך לא מציג כלום במקום מספר שאולי לא יתאים.
+function weeklyCapacity(settings, grade) {
+  if (!settings || !grade) return 0;
+  const weekday = Math.min(computeDay(settings, grade).lessons, SLOTS_PER_DAY);
+  const friday = Math.min(lessonsBetween(settings, settings.friday_end_time), SLOTS_PER_DAY);
+  let total = 0;
+  for (const d of settings.active_days || []) {
+    const n = d === 6 ? friday : weekday;
+    if (n < 1) return 0;
+    total += n;
+  }
+  return total;
 }
 
 // ─── save tracking ──────────────────────────────────────────────────────────
