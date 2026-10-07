@@ -118,7 +118,7 @@ export const getScheduleRuns = () => api.get('/schedule-runs/');
 export const selectScheduleRun = (id) => api.patch(`/schedule-runs/${id}/select`);
 export const deleteScheduleRun = (id) => api.delete(`/schedule-runs/${id}`);
 export const updateScheduleRunNote = (id, note) => api.patch(`/schedule-runs/${id}/note`, { admin_note: note });
-export const getScheduleRunEntries = (runId) => api.get(`/schedule-runs/${runId}/entries`);
+export const getScheduleRunEntries = (runId) => api2.get(`/schedule/run/${runId}/entries`);
 
 // AI parsing of teacher preferences
 export const parseConstraintsAI = (text) =>
