@@ -160,6 +160,7 @@ export const getGenerationPreflight = () => api2.get('/generation/preflight');
 export const getCurrentSchedule = () => api2.get('/schedule/current'); // admin: whole school
 export const getMySchedule = () => api2.get('/schedule/me');           // teacher: own only
 export const publishSchedule = () => api2.post('/schedule/publish');
+export const getSettingsStatus = () => api2.get('/schedule/settings-status');
 
 // Password reset (no login needed)
 export const forgotPassword = (email) =>
