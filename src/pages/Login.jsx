@@ -84,9 +84,11 @@ export default function Login() {
       const res = await axios.post('/auth/google-oauth/', {
         credential: credentialResponse.credential,
       });
-      const { access_token, ...userData } = res.data;
+      const token = res.data.access_token;
+      localStorage.setItem('token', token);
+      const meRes = await getMe();
       await holdSplash(startedAt);
-      handleAfterLogin(access_token, userData);
+      handleAfterLogin(token, meRes.data);
     } catch (err) {
       const msg = err?.response?.data?.detail;
       setError(typeof msg === 'string' ? msg : 'שגיאה בהתחברות עם גוגל');
