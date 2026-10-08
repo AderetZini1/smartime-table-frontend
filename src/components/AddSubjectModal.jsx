@@ -9,7 +9,7 @@ const schema = yup.object({
 });
 
 export default function AddSubjectModal({ onClose, onAdded, rooms }) {
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({
+  const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm({
     resolver: yupResolver(schema),
     defaultValues: { required_room_id: '' }
   });
@@ -21,6 +21,12 @@ export default function AddSubjectModal({ onClose, onAdded, rooms }) {
       onClose();
     } catch (err) {
       console.error(err);
+      const fieldErrors = err.response?.data?.detail?.field_errors;
+      if (err.response?.status === 409 && fieldErrors) {
+        Object.entries(fieldErrors).forEach(([field, message]) => {
+          setError(field, { type: 'server', message });
+        });
+      }
     }
   };
 
