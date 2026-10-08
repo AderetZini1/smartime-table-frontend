@@ -19,8 +19,12 @@ export default function EditModal({ title, fields, initial, onSave, onClose }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
-  const setField = (key, val) => setValues(prev => ({ ...prev, [key]: val }));
+  const setField = (key, val) => {
+    setValues(prev => ({ ...prev, [key]: val }));
+    setFieldErrors(prev => ({ ...prev, [key]: undefined }));
+  };
 
   const handleSave = async () => {
     // basic required check (fields not marked optional)
@@ -31,6 +35,7 @@ export default function EditModal({ title, fields, initial, onSave, onClose }) {
       }
     }
     setError('');
+    setFieldErrors({});
     setSaving(true);
     try {
       // coerce numbers + empty selects to null
@@ -45,7 +50,12 @@ export default function EditModal({ title, fields, initial, onSave, onClose }) {
       onClose();
     } catch (err) {
       console.error(err);
-      setError('השמירה נכשלה. נסו שוב.');
+      const serverFieldErrors = err.response?.data?.detail?.field_errors;
+      if (err.response?.status === 409 && serverFieldErrors) {
+        setFieldErrors(serverFieldErrors);
+      } else {
+        setError('השמירה נכשלה. נסו שוב.');
+      }
       setSaving(false);
     }
   };
@@ -57,6 +67,14 @@ export default function EditModal({ title, fields, initial, onSave, onClose }) {
     backgroundColor: '#FAF7F2', outline: 'none', boxSizing: 'border-box',
     fontFamily: 'Varela Round, sans-serif',
   };
+
+  // Red border for a field with a server error. Overrides the same `border`
+  // shorthand (no mixing with borderColor, which causes React style warnings).
+  const styleFor = (key, extra = {}) => ({
+    ...inputStyle,
+    ...extra,
+    ...(fieldErrors[key] ? { border: '1px solid #c0705a', backgroundColor: '#fff8f6' } : {}),
+  });
 
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(74,63,53,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={onClose}>
@@ -76,18 +94,19 @@ export default function EditModal({ title, fields, initial, onSave, onClose }) {
               {f.label}{f.optional && <span style={{ color: '#c8baa6', fontSize: '11px' }}> (אופציונלי)</span>}
             </label>
             {f.type === 'select' ? (
-              <select style={{ ...inputStyle, cursor: 'pointer' }} value={values[f.key] ?? ''} onChange={e => setField(f.key, e.target.value)}>
+              <select style={styleFor(f.key, { cursor: 'pointer' })} value={values[f.key] ?? ''} onChange={e => setField(f.key, e.target.value)}>
                 <option value="">— ללא —</option>
                 {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             ) : (
               <input
                 type={f.type === 'number' ? 'number' : 'text'}
-                style={inputStyle}
+                style={styleFor(f.key)}
                 value={values[f.key] ?? ''}
                 onChange={e => setField(f.key, e.target.value)}
               />
             )}
+            {fieldErrors[f.key] && <p style={{ fontSize: '11px', color: '#c0705a', marginTop: '4px' }}>{fieldErrors[f.key]}</p>}
           </div>
         ))}
 
