@@ -213,6 +213,7 @@ export default function TeacherDashboard() {
   const [submissionStatus, setSubmissionStatus] = useState(null);
   const [schedColorMode, setSchedColorMode] = useState('subject'); // 'subject' | 'group'
   const [submitting, setSubmitting] = useState(false);
+  const [justSubmitted, setJustSubmitted] = useState(false);
 
   const [myEntries, setMyEntries] = useState([]);
   const [myRun, setMyRun] = useState(null);
@@ -515,6 +516,8 @@ export default function TeacherDashboard() {
     try {
       const res = await submitMyPreferences();
       setSubmissionStatus(res.data);
+      setJustSubmitted(true);
+      setTimeout(() => setJustSubmitted(false), 2500);
     } catch (e) { /* silent */ }
     finally {
       setSubmitting(false);
@@ -1057,6 +1060,13 @@ export default function TeacherDashboard() {
                         <div style={{ fontSize: '13px', color: '#8a7a6e' }}>
                           {submissionStatus.submitted_at ? `נשלח בתאריך ${fmtDate(submissionStatus.submitted_at)}` : ''}
                         </div>
+                        <div style={{ fontSize: '13px', color: '#8a7a6e', margin: '16px 0 12px', lineHeight: 1.6 }}>
+                          ביצעתם שינויים אחרי השליחה? שלחו שוב כדי שהמנהל יקבל את העדכון.
+                        </div>
+                        <button onClick={handleSubmitForm} disabled={submitting} style={{ ...styles.btnSave, opacity: submitting ? 0.6 : 1 }}>
+                          <i className="ti ti-send" aria-hidden="true"></i> {submitting ? 'שולח...' : 'שליחה מחדש'}
+                        </button>
+                        {justSubmitted && <div style={{ fontSize: '14px', color: '#8a9e78', marginTop: '10px' }}>✓ השינויים נשלחו</div>}
                       </div>
                     ) : (
                       <div>
